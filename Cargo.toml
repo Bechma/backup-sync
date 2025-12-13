@@ -1,0 +1,17 @@
+[package]
+name = "backup_sync"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+librsync = "0.2.5"
+notify = "8.2.0"
+notify-debouncer-full = "0.6.0"
+rayon = "1.11.0"
+fast_rsync = "0.2.0"
+
+walkdir = "2.5.0"
+fs2 = "0.4.3"
+
+[dev-dependencies]
+tempfile = "3"
