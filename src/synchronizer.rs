@@ -240,6 +240,37 @@ impl Synchronizer {
         Ok(())
     }
 
+    pub fn handle_original_renamed(
+        &mut self,
+        from_path: &PathBuf,
+        to_path: &PathBuf,
+    ) -> std::io::Result<()> {
+        let new_backup_path = self.get_backup_path(to_path).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "Cannot determine backup path",
+            )
+        })?;
+        let old_backup_path = self.path_mapping.remove(from_path);
+        self.original.remove_entry(from_path);
+
+        if let Some(old_backup) = old_backup_path
+            && old_backup.exists()
+        {
+            if let Some(parent) = new_backup_path.parent() {
+                fs::create_dir_all(parent)?;
+            }
+            fs::rename(&old_backup, &new_backup_path)?;
+            self.backup.remove_entry(&old_backup);
+        }
+
+        self.original.update_entry(to_path)?;
+        self.backup.update_entry(&new_backup_path)?;
+        self.path_mapping.insert(to_path.clone(), new_backup_path);
+
+        Ok(())
+    }
+
     pub fn sync(&mut self) -> std::io::Result<()> {
         let _locks = self.acquire_locks()?;
 
@@ -721,5 +752,121 @@ mod tests {
 
         assert!(backup_file.exists());
         assert_eq!(read_file_content(&backup_file), "content");
+    }
+
+    #[test]
+    fn test_handle_original_renamed_renames_backup_file() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        let original_file = create_file(original_dir.path(), "old_name.txt", "content");
+        create_file(backup_dir.path(), "old_name.txt", "content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let from_path = fs::canonicalize(&original_file).unwrap();
+        let to_path = original_dir.path().join("new_name.txt");
+        fs::rename(&original_file, &to_path).unwrap();
+        let to_path = fs::canonicalize(&to_path).unwrap();
+
+        syncer
+            .handle_original_renamed(&from_path, &to_path)
+            .unwrap();
+
+        let old_backup = backup_dir.path().join("old_name.txt");
+        let new_backup = backup_dir.path().join("new_name.txt");
+        assert!(!old_backup.exists());
+        assert!(new_backup.exists());
+        assert_eq!(read_file_content(&new_backup), "content");
+    }
+
+    #[test]
+    fn test_handle_original_renamed_updates_path_mapping() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        let original_file = create_file(original_dir.path(), "old_name.txt", "content");
+        create_file(backup_dir.path(), "old_name.txt", "content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let from_path = fs::canonicalize(&original_file).unwrap();
+        let to_path = original_dir.path().join("new_name.txt");
+        fs::rename(&original_file, &to_path).unwrap();
+        let to_path = fs::canonicalize(&to_path).unwrap();
+
+        syncer
+            .handle_original_renamed(&from_path, &to_path)
+            .unwrap();
+
+        assert!(!syncer.path_mapping.contains_key(&from_path));
+        assert!(syncer.path_mapping.contains_key(&to_path));
+    }
+
+    #[test]
+    fn test_handle_original_renamed_to_nested_directory() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        let original_file = create_file(original_dir.path(), "file.txt", "content");
+        create_file(backup_dir.path(), "file.txt", "content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let from_path = fs::canonicalize(&original_file).unwrap();
+        fs::create_dir_all(original_dir.path().join("subdir")).unwrap();
+        let to_path = original_dir.path().join("subdir/renamed.txt");
+        fs::rename(&original_file, &to_path).unwrap();
+        let to_path = fs::canonicalize(&to_path).unwrap();
+
+        syncer
+            .handle_original_renamed(&from_path, &to_path)
+            .unwrap();
+
+        let new_backup = backup_dir.path().join("subdir/renamed.txt");
+        assert!(new_backup.exists());
+        assert_eq!(read_file_content(&new_backup), "content");
+    }
+
+    #[test]
+    fn test_handle_original_renamed_updates_entries() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        let original_file = create_file(original_dir.path(), "old.txt", "content");
+        create_file(backup_dir.path(), "old.txt", "content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let from_path = fs::canonicalize(&original_file).unwrap();
+        let to_path = original_dir.path().join("new.txt");
+        fs::rename(&original_file, &to_path).unwrap();
+        let to_path = fs::canonicalize(&to_path).unwrap();
+
+        syncer
+            .handle_original_renamed(&from_path, &to_path)
+            .unwrap();
+
+        assert!(syncer.original.get_entry(&from_path).is_none());
+        assert!(syncer.original.get_entry(&to_path).is_some());
+
+        let new_backup = syncer.get_backup_path(&to_path).unwrap();
+        assert!(syncer.backup.get_entry(&new_backup).is_some());
     }
 }
