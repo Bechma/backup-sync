@@ -1,5 +1,5 @@
 use crate::rsync::{apply_patch, calculate_delta, create_signature};
-use crate::synchronizer::Synchronizer;
+use crate::synchronizer::{SyncOptions, Synchronizer};
 use notify::event::{ModifyKind, RenameMode};
 use notify::EventKind;
 use notify_debouncer_full::DebouncedEvent;
@@ -20,8 +20,12 @@ impl AppState {
         }
     }
 
-    pub fn new_with_local_sync(original: &str, backup: &str) -> std::io::Result<Self> {
-        let mut syncer = Synchronizer::new(original, backup)?;
+    pub fn new_with_local_sync(
+        original: PathBuf,
+        backup: PathBuf,
+        options: SyncOptions,
+    ) -> std::io::Result<Self> {
+        let mut syncer = Synchronizer::new(original, backup)?.with_options(options);
         syncer.sync()?;
         Ok(Self::new(syncer))
     }

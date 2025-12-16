@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::fs::{self, File, Metadata};
+use std::fs::{self, File};
 use std::path::PathBuf;
 
 use crate::rsync::create_signature;
@@ -9,7 +9,7 @@ use fs2::FileExt;
 pub struct SyncOptions {
     when_missing_preserve_backup: bool,
     when_conflict_preserve_backup: bool,
-    on_delete_keep_backup: bool,
+    when_delete_keep_backup: bool,
 }
 
 impl SyncOptions {
@@ -22,35 +22,21 @@ impl SyncOptions {
         self.when_conflict_preserve_backup = when_conflict;
         self
     }
-    pub fn with_on_delete_keep_backup(mut self, on_delete: bool) -> Self {
-        self.on_delete_keep_backup = on_delete;
+    pub fn when_delete_keep_backup(mut self, on_delete: bool) -> Self {
+        self.when_delete_keep_backup = on_delete;
         self
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct FileEntry {
     path: PathBuf,
     signature: Vec<u8>,
-    metadata: FileMetadata,
 }
 
-#[derive(Debug, Clone)]
-struct FileMetadata {
-    pub size: u64,
-    pub modified: Option<std::time::SystemTime>,
-    pub created: Option<std::time::SystemTime>,
-    pub is_dir: bool,
-}
-
-impl From<Metadata> for FileMetadata {
-    fn from(meta: Metadata) -> Self {
-        Self {
-            size: meta.len(),
-            modified: meta.modified().ok(),
-            created: meta.created().ok(),
-            is_dir: meta.is_dir(),
-        }
+impl FileEntry {
+    pub fn is_dir(&self) -> bool {
+        self.signature.is_empty()
     }
 }
 
@@ -82,7 +68,6 @@ impl FolderStructure {
             let file_entry = FileEntry {
                 path: path.clone(),
                 signature: sig,
-                metadata: metadata.into(),
             };
 
             entries.insert(path, file_entry);
@@ -107,7 +92,6 @@ impl FolderStructure {
         let file_entry = FileEntry {
             path: path.clone(),
             signature: sig,
-            metadata: metadata.into(),
         };
 
         self.entries.insert(path.clone(), file_entry);
@@ -139,13 +123,7 @@ pub struct Synchronizer {
 }
 
 impl Synchronizer {
-    pub fn new(
-        original_root: impl Into<PathBuf>,
-        backup_root: impl Into<PathBuf>,
-    ) -> std::io::Result<Self> {
-        let original_root = fs::canonicalize(original_root.into())?;
-        let backup_root = fs::canonicalize(backup_root.into())?;
-
+    pub fn new(original_root: PathBuf, backup_root: PathBuf) -> std::io::Result<Self> {
         let original = FolderStructure::new(&original_root)?;
         let backup = FolderStructure::new(&backup_root)?;
 
@@ -226,7 +204,7 @@ impl Synchronizer {
     }
 
     pub fn handle_original_deleted(&mut self, original_path: &PathBuf) -> std::io::Result<()> {
-        if self.options.on_delete_keep_backup {
+        if self.options.when_delete_keep_backup {
             return Ok(());
         }
         if let Some(backup_path) = self.path_mapping.remove(original_path) {
@@ -288,7 +266,7 @@ impl Synchronizer {
         let mut locks = Vec::new();
 
         for entry in self.original.entries.values() {
-            if !entry.metadata.is_dir {
+            if !entry.is_dir() {
                 let file = File::open(&entry.path)?;
                 file.lock_shared()?;
                 locks.push(file);
@@ -296,7 +274,7 @@ impl Synchronizer {
         }
 
         for entry in self.backup.entries.values() {
-            if !entry.metadata.is_dir {
+            if !entry.is_dir() {
                 let file = File::options().read(true).write(true).open(&entry.path)?;
                 file.lock_exclusive()?;
                 locks.push(file);
@@ -314,7 +292,7 @@ impl Synchronizer {
         for (relative, original_path) in original_relatives {
             if !backup_relatives.contains_key(relative) {
                 let entry = self.original.get_entry(original_path).unwrap();
-                if entry.metadata.is_dir {
+                if entry.is_dir() {
                     let backup_path = self.backup.root.join(relative);
                     fs::create_dir_all(&backup_path)?;
                     self.backup.update_entry(&backup_path)?;
@@ -339,7 +317,7 @@ impl Synchronizer {
         for (relative, backup_path) in backup_relatives {
             if !original_relatives.contains_key(relative) {
                 let entry = self.backup.get_entry(backup_path).unwrap();
-                if entry.metadata.is_dir {
+                if entry.is_dir() {
                     fs::remove_dir_all(backup_path)?;
                 } else {
                     fs::remove_file(backup_path)?;
@@ -360,7 +338,7 @@ impl Synchronizer {
                 let original_entry = self.original.get_entry(original_path).unwrap();
                 let backup_entry = self.backup.get_entry(backup_path).unwrap();
 
-                if original_entry.metadata.is_dir || backup_entry.metadata.is_dir {
+                if original_entry.is_dir() || backup_entry.is_dir() {
                     continue;
                 }
 
@@ -743,7 +721,7 @@ mod tests {
             backup_dir.path().to_path_buf(),
         )
         .unwrap()
-        .with_options(SyncOptions::default().with_on_delete_keep_backup(true));
+        .with_options(SyncOptions::default().when_delete_keep_backup(true));
 
         let canonical_path = fs::canonicalize(&original_file).unwrap();
         fs::remove_file(&original_file).unwrap();

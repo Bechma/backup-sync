@@ -1,9 +1,11 @@
 [package]
 name = "backup_sync"
+description = "File and folder synchronizer local or remote"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+clap = { version = "4.1", features = ["derive"] }
 librsync = "0.2.5"
 notify = "8.2.0"
 notify-debouncer-full = "0.6.0"
