@@ -33,7 +33,7 @@ fn main() {
 
     let cli = Cli::parse();
     let options = SyncOptions::default()
-        .when_delete_keep_backup(cli.when_delete_keep_backup)
+        .with_when_delete_keep_backup(cli.when_delete_keep_backup)
         .with_when_conflict_preserve_backup(cli.when_conflict_preserve_backup)
         .with_when_missing_preserve_backup(cli.when_missing_preserve_backup);
 

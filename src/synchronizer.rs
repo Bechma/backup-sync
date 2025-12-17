@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use std::fs::{self, File};
+use std::io::Write;
 use std::path::PathBuf;
 
-use crate::rsync::create_signature;
+use crate::rsync::{apply_patch, calculate_delta, create_signature};
 use fs2::FileExt;
 
 #[derive(Debug, Clone, Default)]
@@ -22,7 +23,7 @@ impl SyncOptions {
         self.when_conflict_preserve_backup = when_conflict;
         self
     }
-    pub fn when_delete_keep_backup(mut self, on_delete: bool) -> Self {
+    pub fn with_when_delete_keep_backup(mut self, on_delete: bool) -> Self {
         self.when_delete_keep_backup = on_delete;
         self
     }
@@ -159,28 +160,45 @@ impl Synchronizer {
         }
     }
 
-    pub fn get_original_signature(&self, path: &PathBuf) -> Option<&Vec<u8>> {
+    fn get_original_signature(&self, path: &PathBuf) -> Option<&Vec<u8>> {
         self.original.get_entry(path).map(|e| &e.signature)
     }
 
-    pub fn get_backup_signature(&self, path: &PathBuf) -> Option<&Vec<u8>> {
+    fn get_backup_signature(&self, path: &PathBuf) -> Option<&Vec<u8>> {
         self.backup.get_entry(path).map(|e| &e.signature)
     }
 
-    pub fn update_original_entry(&mut self, path: &PathBuf) -> std::io::Result<()> {
-        self.original.update_entry(path)
+    pub fn handle_original_modified_calculate_delta(
+        &self,
+        original_path: &PathBuf,
+    ) -> std::io::Result<Vec<u8>> {
+        let mut new_file = File::open(original_path)?;
+        let new_sig = create_signature(&mut new_file)?;
+        let backup_path = self.get_backup_path(original_path).unwrap();
+        let old_sig = self.get_backup_signature(&backup_path).unwrap();
+        if &new_sig == old_sig {
+            return Ok(vec![]);
+        }
+        let dlt = calculate_delta(&mut new_file, &old_sig)?;
+        Ok(dlt)
     }
 
-    pub fn update_backup_entry(&mut self, path: &PathBuf) -> std::io::Result<()> {
-        self.backup.update_entry(path)
-    }
+    pub fn handle_original_modified_apply_delta(
+        &mut self,
+        original_path: &PathBuf,
+        dlt: &[u8],
+    ) -> std::io::Result<()> {
+        let backup_path = self.get_backup_path(original_path).unwrap();
+        let mut old_file = File::options().write(true).read(true).open(&backup_path)?;
 
-    pub fn add_path_mapping(&mut self, original_path: PathBuf, backup_path: PathBuf) {
-        self.path_mapping.insert(original_path, backup_path);
-    }
+        let out = apply_patch(&mut old_file, dlt)?;
+        old_file.set_len(0)?;
+        old_file.write_all(&out)?;
+        old_file.sync_data()?;
 
-    pub fn remove_path_mapping(&mut self, original_path: &PathBuf) -> Option<PathBuf> {
-        self.path_mapping.remove(original_path)
+        self.original.update_entry(original_path)?;
+        self.backup.update_entry(&backup_path)?;
+        Ok(())
     }
 
     pub fn handle_original_created(&mut self, original_path: PathBuf) -> std::io::Result<()> {
@@ -721,7 +739,7 @@ mod tests {
             backup_dir.path().to_path_buf(),
         )
         .unwrap()
-        .with_options(SyncOptions::default().when_delete_keep_backup(true));
+        .with_options(SyncOptions::default().with_when_delete_keep_backup(true));
 
         let canonical_path = fs::canonicalize(&original_file).unwrap();
         fs::remove_file(&original_file).unwrap();
@@ -846,5 +864,144 @@ mod tests {
 
         let new_backup = syncer.get_backup_path(&to_path).unwrap();
         assert!(syncer.backup.get_entry(&new_backup).is_some());
+    }
+
+    #[test]
+    fn test_handle_original_modified_calculate_delta_returns_empty_when_unchanged() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        create_file(original_dir.path(), "file.txt", "same content");
+        create_file(backup_dir.path(), "file.txt", "same content");
+
+        let syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+        let delta = syncer
+            .handle_original_modified_calculate_delta(&original_path)
+            .unwrap();
+
+        assert!(delta.is_empty());
+    }
+
+    #[test]
+    fn test_handle_original_modified_calculate_delta_returns_delta_when_changed() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        create_file(original_dir.path(), "file.txt", "new content");
+        create_file(backup_dir.path(), "file.txt", "old content");
+
+        let syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+        let delta = syncer
+            .handle_original_modified_calculate_delta(&original_path)
+            .unwrap();
+
+        assert!(!delta.is_empty());
+    }
+
+    #[test]
+    fn test_handle_original_modified_apply_delta_updates_backup() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        create_file(original_dir.path(), "file.txt", "updated content");
+        create_file(backup_dir.path(), "file.txt", "original content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+        let delta = syncer
+            .handle_original_modified_calculate_delta(&original_path)
+            .unwrap();
+
+        syncer
+            .handle_original_modified_apply_delta(&original_path, &delta)
+            .unwrap();
+
+        let backup_file = backup_dir.path().join("file.txt");
+        assert_eq!(read_file_content(&backup_file), "updated content");
+    }
+
+    #[test]
+    fn test_handle_original_modified_apply_delta_updates_entries() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        create_file(original_dir.path(), "file.txt", "new content");
+        create_file(backup_dir.path(), "file.txt", "old content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+        let backup_path = syncer.get_backup_path(&original_path).unwrap();
+
+        let old_backup_sig = syncer.get_backup_signature(&backup_path).unwrap().clone();
+
+        let delta = syncer
+            .handle_original_modified_calculate_delta(&original_path)
+            .unwrap();
+
+        syncer
+            .handle_original_modified_apply_delta(&original_path, &delta)
+            .unwrap();
+
+        let new_original_sig = syncer.get_original_signature(&original_path).unwrap();
+        let new_backup_sig = syncer.get_backup_signature(&backup_path).unwrap();
+
+        assert_ne!(&old_backup_sig, new_backup_sig);
+        assert_eq!(new_original_sig, new_backup_sig);
+    }
+
+    #[test]
+    fn test_handle_original_modified_apply_delta_with_append() {
+        let original_dir = TempDir::new().unwrap();
+        let backup_dir = TempDir::new().unwrap();
+
+        create_file(
+            original_dir.path(),
+            "file.txt",
+            "original content with more data appended",
+        );
+        create_file(backup_dir.path(), "file.txt", "original content");
+
+        let mut syncer = Synchronizer::new(
+            original_dir.path().to_path_buf(),
+            backup_dir.path().to_path_buf(),
+        )
+        .unwrap();
+
+        let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+        let delta = syncer
+            .handle_original_modified_calculate_delta(&original_path)
+            .unwrap();
+
+        syncer
+            .handle_original_modified_apply_delta(&original_path, &delta)
+            .unwrap();
+
+        let backup_file = backup_dir.path().join("file.txt");
+        assert_eq!(
+            read_file_content(&backup_file),
+            "original content with more data appended"
+        );
     }
 }
