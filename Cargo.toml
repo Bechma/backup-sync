@@ -5,6 +5,7 @@ resolver = "3"
 [workspace.package]
 description = "File and folder synchronizer local or remote"
 edition = "2024"
+license = "AGPL-3"
 
 [workspace.dependencies]
 anyhow = "1.0"
