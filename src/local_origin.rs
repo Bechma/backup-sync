@@ -19,7 +19,7 @@ impl FolderStructure {
 
         for entry in walkdir::WalkDir::new(&root)
             .into_iter()
-            .filter_map(|e| e.ok())
+            .filter_map(std::result::Result::ok)
         {
             let path = entry.path().to_path_buf();
             let metadata = fs::metadata(&path)?;

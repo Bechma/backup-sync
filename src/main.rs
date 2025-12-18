@@ -1,10 +1,5 @@
-mod local_origin;
-mod origin;
-mod rsync;
-mod state;
-mod synchronizer;
-
-use crate::synchronizer::SyncOptions;
+use backup_sync::state;
+use backup_sync::synchronizer::SyncOptions;
 use clap::Parser;
 use notify::RecursiveMode;
 use notify_debouncer_full::new_debouncer;
@@ -52,7 +47,7 @@ fn main() {
                         .par_iter()
                         .for_each(|x| global_state.process_debounced_event(x).unwrap());
                 }
-                Err(e) => println!("watch error: {:?}", e),
+                Err(e) => println!("watch error: {e:?}"),
             }
         }
     }

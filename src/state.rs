@@ -11,6 +11,7 @@ pub struct AppState {
 }
 
 impl AppState {
+    #[must_use] 
     pub fn new(sync: Synchronizer) -> Self {
         Self {
             syncer: RwLock::new(sync),
@@ -56,7 +57,7 @@ impl AppState {
                     .for_each(|x| x.unwrap());
             }
             _ => {}
-        };
+        }
         Ok(())
     }
 
