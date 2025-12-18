@@ -1,7 +1,7 @@
 use crate::local_file_ops::LocalFileOps;
 use crate::origin::FileEntry;
-use std::collections::hash_map::{Keys, Values};
 use std::collections::HashMap;
+use std::collections::hash_map::{Keys, Values};
 use std::fs;
 use std::path::PathBuf;
 

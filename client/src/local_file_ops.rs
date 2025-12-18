@@ -2,7 +2,7 @@ use std::fs::{self, File};
 use std::io::{Seek, Write};
 use std::path::Path;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 use fs2::FileExt;
 use librsync::whole::{delta, patch, signature};
 

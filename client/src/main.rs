@@ -1,5 +1,5 @@
-use backup_sync::state;
-use backup_sync::synchronizer::SyncOptions;
+use backup_sync_client::state;
+use backup_sync_client::synchronizer::SyncOptions;
 use clap::Parser;
 use notify::RecursiveMode;
 use notify_debouncer_full::new_debouncer;

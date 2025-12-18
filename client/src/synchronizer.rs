@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use crate::folder_structure::FolderStructure;
 use crate::local_file_ops::LocalFileOps;
 use crate::origin::FileEntry;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{Context, Result, anyhow};
 
 #[derive(Debug, Clone, Default)]
 pub struct SyncOptions {

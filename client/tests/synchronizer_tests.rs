@@ -1,4 +1,4 @@
-use backup_sync::synchronizer::{SyncOptions, Synchronizer};
+use backup_sync_client::synchronizer::{SyncOptions, Synchronizer};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
@@ -685,7 +685,11 @@ fn test_handle_original_modified_with_shrinking_file() {
     let backup_dir = TempDir::new().unwrap();
 
     create_file(original_dir.path(), "file.txt", "short");
-    create_file(backup_dir.path(), "file.txt", "this is a much longer content");
+    create_file(
+        backup_dir.path(),
+        "file.txt",
+        "this is a much longer content",
+    );
 
     let mut syncer = Synchronizer::new(
         original_dir.path().to_path_buf(),
@@ -851,7 +855,11 @@ fn test_concurrent_file_creations() {
             let original_path = original_dir.path();
             let syncer_ref = &syncer;
             s.spawn(move || {
-                let file_path = create_file(original_path, &format!("file_{i}.txt"), &format!("content {i}"));
+                let file_path = create_file(
+                    original_path,
+                    &format!("file_{i}.txt"),
+                    &format!("content {i}"),
+                );
                 let canonical_path = fs::canonicalize(&file_path).unwrap();
                 syncer_ref
                     .lock()
@@ -914,7 +922,11 @@ fn test_concurrent_different_file_operations() {
 
     // Setup initial files
     for i in 0..5 {
-        create_file(original_dir.path(), &format!("file_{i}.txt"), &format!("content {i}"));
+        create_file(
+            original_dir.path(),
+            &format!("file_{i}.txt"),
+            &format!("content {i}"),
+        );
     }
 
     let mut syncer = Synchronizer::new(

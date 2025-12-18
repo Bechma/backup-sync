@@ -1,7 +1,7 @@
 use crate::synchronizer::{SyncOptions, Synchronizer};
 use anyhow::{Context, Result};
-use notify::event::{ModifyKind, RenameMode};
 use notify::EventKind;
+use notify::event::{ModifyKind, RenameMode};
 use notify_debouncer_full::DebouncedEvent;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;

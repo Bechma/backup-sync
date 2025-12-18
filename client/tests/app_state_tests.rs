@@ -1,7 +1,7 @@
-use backup_sync::state::AppState;
-use backup_sync::synchronizer::SyncOptions;
-use notify::event::{CreateKind, ModifyKind, RemoveKind, RenameMode};
+use backup_sync_client::state::AppState;
+use backup_sync_client::synchronizer::SyncOptions;
 use notify::EventKind;
+use notify::event::{CreateKind, ModifyKind, RemoveKind, RenameMode};
 use notify_debouncer_full::DebouncedEvent;
 use std::fs::{self, File};
 use std::io::Write;
@@ -89,10 +89,7 @@ fn test_app_state_process_create_event() {
     let new_file = create_file(original_dir.path(), "new_file.txt", "new content");
     let canonical_path = fs::canonicalize(&new_file).unwrap();
 
-    let event = create_debounced_event(
-        EventKind::Create(CreateKind::File),
-        vec![canonical_path],
-    );
+    let event = create_debounced_event(EventKind::Create(CreateKind::File), vec![canonical_path]);
 
     state.process_debounced_event(&event).unwrap();
 
@@ -114,13 +111,14 @@ fn test_app_state_process_create_event_nested() {
     .unwrap();
 
     // Create a new nested file after initial sync
-    let new_file = create_file(original_dir.path(), "subdir/new_file.txt", "nested new content");
+    let new_file = create_file(
+        original_dir.path(),
+        "subdir/new_file.txt",
+        "nested new content",
+    );
     let canonical_path = fs::canonicalize(&new_file).unwrap();
 
-    let event = create_debounced_event(
-        EventKind::Create(CreateKind::File),
-        vec![canonical_path],
-    );
+    let event = create_debounced_event(EventKind::Create(CreateKind::File), vec![canonical_path]);
 
     state.process_debounced_event(&event).unwrap();
 
@@ -152,10 +150,7 @@ fn test_app_state_process_delete_event() {
     let canonical_path = fs::canonicalize(&original_file).unwrap();
     fs::remove_file(&original_file).unwrap();
 
-    let event = create_debounced_event(
-        EventKind::Remove(RemoveKind::File),
-        vec![canonical_path],
-    );
+    let event = create_debounced_event(EventKind::Remove(RemoveKind::File), vec![canonical_path]);
 
     state.process_debounced_event(&event).unwrap();
 
@@ -185,10 +180,7 @@ fn test_app_state_process_delete_event_keeps_backup_with_option() {
     let canonical_path = fs::canonicalize(&original_file).unwrap();
     fs::remove_file(&original_file).unwrap();
 
-    let event = create_debounced_event(
-        EventKind::Remove(RemoveKind::File),
-        vec![canonical_path],
-    );
+    let event = create_debounced_event(EventKind::Remove(RemoveKind::File), vec![canonical_path]);
 
     state.process_debounced_event(&event).unwrap();
 
@@ -424,9 +416,18 @@ fn test_app_state_multiple_files_sync() {
     assert!(backup_dir.path().join("file1.txt").exists());
     assert!(backup_dir.path().join("file2.txt").exists());
     assert!(backup_dir.path().join("subdir/file3.txt").exists());
-    assert_eq!(read_file_content(&backup_dir.path().join("file1.txt")), "content 1");
-    assert_eq!(read_file_content(&backup_dir.path().join("file2.txt")), "content 2");
-    assert_eq!(read_file_content(&backup_dir.path().join("subdir/file3.txt")), "content 3");
+    assert_eq!(
+        read_file_content(&backup_dir.path().join("file1.txt")),
+        "content 1"
+    );
+    assert_eq!(
+        read_file_content(&backup_dir.path().join("file2.txt")),
+        "content 2"
+    );
+    assert_eq!(
+        read_file_content(&backup_dir.path().join("subdir/file3.txt")),
+        "content 3"
+    );
 }
 
 // ==================== EDGE CASE TESTS ====================
@@ -527,10 +528,7 @@ fn test_app_state_process_multiple_delete_events_batch() {
     fs::remove_file(original_dir.path().join("file1.txt")).unwrap();
     fs::remove_file(original_dir.path().join("file2.txt")).unwrap();
 
-    let event = create_debounced_event(
-        EventKind::Remove(RemoveKind::File),
-        vec![path1, path2],
-    );
+    let event = create_debounced_event(EventKind::Remove(RemoveKind::File), vec![path1, path2]);
 
     state.process_debounced_event(&event).unwrap();
 
@@ -581,17 +579,10 @@ fn test_app_state_deeply_nested_create() {
     )
     .unwrap();
 
-    let new_file = create_file(
-        original_dir.path(),
-        "a/b/c/d/e/deep.txt",
-        "deep content",
-    );
+    let new_file = create_file(original_dir.path(), "a/b/c/d/e/deep.txt", "deep content");
     let canonical_path = fs::canonicalize(&new_file).unwrap();
 
-    let event = create_debounced_event(
-        EventKind::Create(CreateKind::File),
-        vec![canonical_path],
-    );
+    let event = create_debounced_event(EventKind::Create(CreateKind::File), vec![canonical_path]);
 
     state.process_debounced_event(&event).unwrap();
 
@@ -698,10 +689,8 @@ fn test_app_state_create_delete_same_file() {
     // Delete file
     fs::remove_file(&new_file).unwrap();
 
-    let delete_event = create_debounced_event(
-        EventKind::Remove(RemoveKind::File),
-        vec![canonical_path],
-    );
+    let delete_event =
+        create_debounced_event(EventKind::Remove(RemoveKind::File), vec![canonical_path]);
     state.process_debounced_event(&delete_event).unwrap();
 
     assert!(!backup_dir.path().join("temp.txt").exists());
@@ -726,7 +715,11 @@ fn test_app_state_concurrent_create_events() {
             let original_path = original_dir.path();
             let state_ref = &state;
             s.spawn(move || {
-                let file_path = create_file(original_path, &format!("concurrent_{i}.txt"), &format!("content {i}"));
+                let file_path = create_file(
+                    original_path,
+                    &format!("concurrent_{i}.txt"),
+                    &format!("content {i}"),
+                );
                 let canonical_path = fs::canonicalize(&file_path).unwrap();
 
                 let event = DebouncedEvent {
@@ -757,7 +750,11 @@ fn test_app_state_concurrent_modify_different_files() {
 
     // Create initial files
     for i in 0..5 {
-        create_file(original_dir.path(), &format!("file_{i}.txt"), &format!("initial {i}"));
+        create_file(
+            original_dir.path(),
+            &format!("file_{i}.txt"),
+            &format!("initial {i}"),
+        );
     }
 
     let state = AppState::new_with_local_sync(
@@ -778,7 +775,9 @@ fn test_app_state_concurrent_modify_different_files() {
 
                 let event = DebouncedEvent {
                     event: notify::Event {
-                        kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
+                        kind: EventKind::Modify(ModifyKind::Data(
+                            notify::event::DataChange::Content,
+                        )),
                         paths: vec![canonical_path],
                         attrs: Default::default(),
                     },
@@ -804,7 +803,11 @@ fn test_app_state_stress_test_many_files() {
 
     // Create many files
     for i in 0..50 {
-        create_file(original_dir.path(), &format!("file_{i}.txt"), &format!("content {i}"));
+        create_file(
+            original_dir.path(),
+            &format!("file_{i}.txt"),
+            &format!("content {i}"),
+        );
     }
 
     let _state = AppState::new_with_local_sync(
