@@ -3,6 +3,8 @@ use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
 
+use crate::local_origin::FolderStructure;
+use crate::origin::FileEntry;
 use crate::rsync::{apply_patch, calculate_delta, create_signature};
 use fs2::FileExt;
 
@@ -30,92 +32,6 @@ impl SyncOptions {
 }
 
 #[derive(Debug)]
-struct FileEntry {
-    path: PathBuf,
-    signature: Vec<u8>,
-}
-
-impl FileEntry {
-    pub fn is_dir(&self) -> bool {
-        self.signature.is_empty()
-    }
-}
-
-#[derive(Debug)]
-struct FolderStructure {
-    root: PathBuf,
-    entries: HashMap<PathBuf, FileEntry>,
-}
-
-impl FolderStructure {
-    pub fn new(root: impl Into<PathBuf>) -> std::io::Result<Self> {
-        let root = fs::canonicalize(root.into())?;
-        let mut entries = HashMap::new();
-
-        for entry in walkdir::WalkDir::new(&root)
-            .into_iter()
-            .filter_map(|e| e.ok())
-        {
-            let path = entry.path().to_path_buf();
-            let metadata = fs::metadata(&path)?;
-
-            let sig = if metadata.is_file() {
-                let mut file = File::open(&path)?;
-                create_signature(&mut file)?
-            } else {
-                Vec::new()
-            };
-
-            let file_entry = FileEntry {
-                path: path.clone(),
-                signature: sig,
-            };
-
-            entries.insert(path, file_entry);
-        }
-
-        Ok(Self { root, entries })
-    }
-
-    pub fn get_entry(&self, path: &PathBuf) -> Option<&FileEntry> {
-        self.entries.get(path)
-    }
-
-    pub fn update_entry(&mut self, path: &PathBuf) -> std::io::Result<()> {
-        let metadata = fs::metadata(path)?;
-        let sig = if metadata.is_file() {
-            let mut file = File::open(path)?;
-            create_signature(&mut file)?
-        } else {
-            Vec::new()
-        };
-
-        let file_entry = FileEntry {
-            path: path.clone(),
-            signature: sig,
-        };
-
-        self.entries.insert(path.clone(), file_entry);
-        Ok(())
-    }
-
-    pub fn remove_entry(&mut self, path: &PathBuf) -> Option<FileEntry> {
-        self.entries.remove(path)
-    }
-
-    pub fn get_relatives(&self) -> HashMap<PathBuf, PathBuf> {
-        self.entries
-            .keys()
-            .filter_map(|p| {
-                p.strip_prefix(&self.root)
-                    .ok()
-                    .map(|rel| (rel.to_path_buf(), p.clone()))
-            })
-            .collect()
-    }
-}
-
-#[derive(Debug)]
 pub struct Synchronizer {
     original: FolderStructure,
     backup: FolderStructure,
@@ -130,7 +46,7 @@ impl Synchronizer {
 
         let mut path_mapping = HashMap::new();
 
-        for original_path in original.entries.keys() {
+        for original_path in original.entries() {
             if let Ok(relative) = original_path.strip_prefix(&original_root) {
                 let backup_path = backup_root.join(relative);
                 path_mapping.insert(original_path.clone(), backup_path);
@@ -153,19 +69,19 @@ impl Synchronizer {
     pub fn get_backup_path(&self, original_path: &PathBuf) -> Option<PathBuf> {
         if let Some(path) = self.path_mapping.get(original_path) {
             Some(path.clone())
-        } else if let Ok(relative) = original_path.strip_prefix(&self.original.root) {
-            Some(self.backup.root.join(relative))
+        } else if let Ok(relative) = original_path.strip_prefix(self.original.root()) {
+            Some(self.backup.root().join(relative))
         } else {
             None
         }
     }
 
-    fn get_original_signature(&self, path: &PathBuf) -> Option<&Vec<u8>> {
-        self.original.get_entry(path).map(|e| &e.signature)
+    fn get_original_signature(&self, path: &PathBuf) -> Option<&[u8]> {
+        self.original.get_entry(path).map(FileEntry::signature)
     }
 
-    fn get_backup_signature(&self, path: &PathBuf) -> Option<&Vec<u8>> {
-        self.backup.get_entry(path).map(|e| &e.signature)
+    fn get_backup_signature(&self, path: &PathBuf) -> Option<&[u8]> {
+        self.backup.get_entry(path).map(FileEntry::signature)
     }
 
     pub fn handle_original_modified_calculate_delta(
@@ -179,7 +95,7 @@ impl Synchronizer {
         if &new_sig == old_sig {
             return Ok(vec![]);
         }
-        let dlt = calculate_delta(&mut new_file, &old_sig)?;
+        let dlt = calculate_delta(&mut new_file, old_sig)?;
         Ok(dlt)
     }
 
@@ -283,17 +199,17 @@ impl Synchronizer {
     fn acquire_locks(&self) -> std::io::Result<Vec<File>> {
         let mut locks = Vec::new();
 
-        for entry in self.original.entries.values() {
+        for entry in self.original.files() {
             if !entry.is_dir() {
-                let file = File::open(&entry.path)?;
+                let file = File::open(entry.path())?;
                 file.lock_shared()?;
                 locks.push(file);
             }
         }
 
-        for entry in self.backup.entries.values() {
+        for entry in self.backup.files() {
             if !entry.is_dir() {
-                let file = File::options().read(true).write(true).open(&entry.path)?;
+                let file = File::options().read(true).write(true).open(entry.path())?;
                 file.lock_exclusive()?;
                 locks.push(file);
             }
@@ -311,7 +227,7 @@ impl Synchronizer {
             if !backup_relatives.contains_key(relative) {
                 let entry = self.original.get_entry(original_path).unwrap();
                 if entry.is_dir() {
-                    let backup_path = self.backup.root.join(relative);
+                    let backup_path = self.backup.root().join(relative);
                     fs::create_dir_all(&backup_path)?;
                     self.backup.update_entry(&backup_path)?;
                     self.path_mapping.insert(original_path.clone(), backup_path);
@@ -360,7 +276,7 @@ impl Synchronizer {
                     continue;
                 }
 
-                if original_entry.signature != backup_entry.signature {
+                if original_entry.signature() != backup_entry.signature() {
                     if self.options.when_conflict_preserve_backup {
                         fs::copy(backup_path, original_path)?;
                         self.original.update_entry(original_path)?;
@@ -954,7 +870,10 @@ mod tests {
         let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
         let backup_path = syncer.get_backup_path(&original_path).unwrap();
 
-        let old_backup_sig = syncer.get_backup_signature(&backup_path).unwrap().clone();
+        let old_backup_sig: Vec<u8> = syncer
+            .get_backup_signature(&backup_path)
+            .map(|x| x.to_owned())
+            .unwrap();
 
         let delta = syncer
             .handle_original_modified_calculate_delta(&original_path)
@@ -967,7 +886,7 @@ mod tests {
         let new_original_sig = syncer.get_original_signature(&original_path).unwrap();
         let new_backup_sig = syncer.get_backup_signature(&backup_path).unwrap();
 
-        assert_ne!(&old_backup_sig, new_backup_sig);
+        assert_ne!(old_backup_sig, new_backup_sig);
         assert_eq!(new_original_sig, new_backup_sig);
     }
 

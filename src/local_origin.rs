@@ -1,0 +1,87 @@
+use crate::origin::FileEntry;
+use crate::rsync::create_signature;
+use std::collections::hash_map::{Keys, Values};
+use std::collections::HashMap;
+use std::fs;
+use std::fs::File;
+use std::path::PathBuf;
+
+#[derive(Debug)]
+pub(crate) struct FolderStructure {
+    root: PathBuf,
+    entries: HashMap<PathBuf, FileEntry>,
+}
+
+impl FolderStructure {
+    pub(crate) fn new(root: impl Into<PathBuf>) -> std::io::Result<Self> {
+        let root = fs::canonicalize(root.into())?;
+        let mut entries = HashMap::new();
+
+        for entry in walkdir::WalkDir::new(&root)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            let path = entry.path().to_path_buf();
+            let metadata = fs::metadata(&path)?;
+
+            let sig = if metadata.is_file() {
+                let mut file = File::open(&path)?;
+                create_signature(&mut file)?
+            } else {
+                Vec::new()
+            };
+
+            let file_entry = FileEntry::new(path.clone(), sig);
+
+            entries.insert(path, file_entry);
+        }
+
+        Ok(Self { root, entries })
+    }
+
+    pub(crate) fn root(&self) -> &PathBuf {
+        &self.root
+    }
+
+    pub(crate) fn entries(&self) -> Keys<'_, PathBuf, FileEntry> {
+        self.entries.keys()
+    }
+
+    pub(crate) fn files(&self) -> Values<'_, PathBuf, FileEntry> {
+        self.entries.values()
+    }
+
+    pub(crate) fn get_entry(&self, path: &PathBuf) -> Option<&FileEntry> {
+        self.entries.get(path)
+    }
+
+    pub(crate) fn update_entry(&mut self, path: &PathBuf) -> std::io::Result<()> {
+        let metadata = fs::metadata(path)?;
+        let sig = if metadata.is_file() {
+            let mut file = File::open(path)?;
+            create_signature(&mut file)?
+        } else {
+            Vec::new()
+        };
+
+        let file_entry = FileEntry::new(path.clone(), sig);
+
+        self.entries.insert(path.clone(), file_entry);
+        Ok(())
+    }
+
+    pub(crate) fn remove_entry(&mut self, path: &PathBuf) -> Option<FileEntry> {
+        self.entries.remove(path)
+    }
+
+    pub(crate) fn get_relatives(&self) -> HashMap<PathBuf, PathBuf> {
+        self.entries
+            .keys()
+            .filter_map(|p| {
+                p.strip_prefix(&self.root)
+                    .ok()
+                    .map(|rel| (rel.to_path_buf(), p.clone()))
+            })
+            .collect()
+    }
+}

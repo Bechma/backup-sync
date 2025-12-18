@@ -9,10 +9,10 @@ pub(crate) fn create_signature(f: &mut File) -> Result<Vec<u8>> {
     Ok(sig)
 }
 
-pub(crate) fn calculate_delta(new_file: &mut File, old_sig: &Vec<u8>) -> Result<Vec<u8>> {
+pub(crate) fn calculate_delta(new_file: &mut File, mut old_sig: &[u8]) -> Result<Vec<u8>> {
     new_file.seek(std::io::SeekFrom::Start(0))?;
     let mut dlt = Vec::<u8>::new();
-    delta(new_file, &mut old_sig.as_slice(), &mut dlt).map_err(std::io::Error::other)?;
+    delta(new_file, &mut old_sig, &mut dlt).map_err(std::io::Error::other)?;
     Ok(dlt)
 }
 
