@@ -1,13 +1,11 @@
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Write;
+use std::fs::File;
 use std::path::PathBuf;
 
-use crate::local_origin::FolderStructure;
+use crate::folder_structure::FolderStructure;
+use crate::local_file_ops::LocalFileOps;
 use crate::origin::FileEntry;
-use crate::rsync::{apply_patch, calculate_delta, create_signature};
 use anyhow::{anyhow, Context, Result};
-use fs2::FileExt;
 
 #[derive(Debug, Clone, Default)]
 pub struct SyncOptions {
@@ -96,10 +94,7 @@ impl Synchronizer {
         &self,
         original_path: &PathBuf,
     ) -> Result<Vec<u8>> {
-        let mut new_file = File::open(original_path)
-            .with_context(|| format!("Failed to open original file: {original_path:?}"))?;
-        let new_sig = create_signature(&mut new_file)
-            .with_context(|| format!("Failed to create signature for: {original_path:?}"))?;
+        let new_sig = LocalFileOps::create_signature(original_path)?;
         let backup_path = self
             .get_backup_path(original_path)
             .with_context(|| format!("Failed to get backup path for: {original_path:?}"))?;
@@ -107,8 +102,7 @@ impl Synchronizer {
         if new_sig == old_sig {
             return Ok(vec![]);
         }
-        let dlt = calculate_delta(&mut new_file, old_sig)
-            .with_context(|| format!("Failed to calculate delta for: {original_path:?}"))?;
+        let dlt = LocalFileOps::calculate_delta(old_sig, original_path)?;
         Ok(dlt)
     }
 
@@ -120,23 +114,7 @@ impl Synchronizer {
         let backup_path = self
             .get_backup_path(original_path)
             .with_context(|| format!("Failed to get backup path for: {original_path:?}"))?;
-        let mut old_file = File::options()
-            .write(true)
-            .read(true)
-            .open(&backup_path)
-            .with_context(|| format!("Failed to open backup file for writing: {backup_path:?}"))?;
-
-        let out = apply_patch(&mut old_file, dlt)
-            .with_context(|| format!("Failed to apply patch to: {backup_path:?}"))?;
-        old_file
-            .set_len(0)
-            .with_context(|| format!("Failed to truncate backup file: {backup_path:?}"))?;
-        old_file
-            .write_all(&out)
-            .with_context(|| format!("Failed to write to backup file: {backup_path:?}"))?;
-        old_file
-            .sync_data()
-            .with_context(|| format!("Failed to sync backup file: {backup_path:?}"))?;
+        LocalFileOps::handle_original_modified_apply_delta(&backup_path, dlt)?;
 
         self.original
             .update_entry(original_path)
@@ -152,13 +130,7 @@ impl Synchronizer {
             .get_backup_path(&original_path)
             .with_context(|| format!("Cannot determine backup path for: {original_path:?}"))?;
 
-        if let Some(parent) = backup_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("Failed to create parent directories for: {backup_path:?}")
-            })?;
-        }
-        fs::copy(&original_path, &backup_path)
-            .with_context(|| format!("Failed to copy {original_path:?} to {backup_path:?}"))?;
+        LocalFileOps::copy_file(&original_path, &backup_path)?;
 
         self.original
             .update_entry(&original_path)
@@ -176,10 +148,7 @@ impl Synchronizer {
             return Ok(());
         }
         if let Some(backup_path) = self.path_mapping.remove(original_path) {
-            if backup_path.exists() {
-                fs::remove_file(&backup_path)
-                    .with_context(|| format!("Failed to remove backup file: {backup_path:?}"))?;
-            }
+            LocalFileOps::remove_file(&backup_path)?;
             self.backup.remove_entry(&backup_path);
         }
         self.original.remove_entry(original_path);
@@ -198,17 +167,8 @@ impl Synchronizer {
         let old_backup_path = self.path_mapping.remove(from_path);
         self.original.remove_entry(from_path);
 
-        if let Some(old_backup) = old_backup_path
-            && old_backup.exists()
-        {
-            if let Some(parent) = new_backup_path.parent() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("Failed to create parent directories for: {new_backup_path:?}")
-                })?;
-            }
-            fs::rename(&old_backup, &new_backup_path).with_context(|| {
-                format!("Failed to rename {old_backup:?} to {new_backup_path:?}")
-            })?;
+        if let Some(old_backup) = old_backup_path {
+            LocalFileOps::rename_file(&old_backup, &new_backup_path)?;
             self.backup.remove_entry(&old_backup);
         }
 
@@ -247,11 +207,7 @@ impl Synchronizer {
         for entry in self.original.files() {
             if !entry.is_dir() {
                 let path = entry.path();
-                let file = File::open(path).with_context(|| {
-                    format!("Failed to open original file for locking: {path:?}")
-                })?;
-                file.lock_shared()
-                    .with_context(|| format!("Failed to acquire shared lock on: {path:?}"))?;
+                let file = LocalFileOps::lock_shared(path)?;
                 locks.push(file);
             }
         }
@@ -259,13 +215,7 @@ impl Synchronizer {
         for entry in self.backup.files() {
             if !entry.is_dir() {
                 let path = entry.path();
-                let file = File::options()
-                    .read(true)
-                    .write(true)
-                    .open(path)
-                    .with_context(|| format!("Failed to open backup file for locking: {path:?}"))?;
-                file.lock_exclusive()
-                    .with_context(|| format!("Failed to acquire exclusive lock on: {path:?}"))?;
+                let file = LocalFileOps::lock_exclusive(path)?;
                 locks.push(file);
             }
         }
@@ -286,9 +236,7 @@ impl Synchronizer {
                     .with_context(|| format!("Failed to get original entry: {original_path:?}"))?;
                 if entry.is_dir() {
                     let backup_path = self.backup.root().join(relative);
-                    fs::create_dir_all(&backup_path).with_context(|| {
-                        format!("Failed to create backup directory: {backup_path:?}")
-                    })?;
+                    LocalFileOps::create_dir_all(&backup_path)?;
                     self.backup.update_entry(&backup_path).with_context(|| {
                         format!("Failed to update backup entry: {backup_path:?}")
                     })?;
@@ -317,13 +265,9 @@ impl Synchronizer {
                     .get_entry(backup_path)
                     .with_context(|| format!("Failed to get backup entry: {backup_path:?}"))?;
                 if entry.is_dir() {
-                    fs::remove_dir_all(backup_path).with_context(|| {
-                        format!("Failed to remove backup directory: {backup_path:?}")
-                    })?;
+                    LocalFileOps::remove_dir_all(backup_path)?;
                 } else {
-                    fs::remove_file(backup_path).with_context(|| {
-                        format!("Failed to remove backup file: {backup_path:?}")
-                    })?;
+                    LocalFileOps::remove_file(backup_path)?;
                 }
                 self.backup.remove_entry(backup_path);
             }
@@ -353,16 +297,12 @@ impl Synchronizer {
 
                 if original_entry.signature() != backup_entry.signature() {
                     if self.options.when_conflict_preserve_backup {
-                        fs::copy(backup_path, original_path).with_context(|| {
-                            format!("Failed to copy {backup_path:?} to {original_path:?}")
-                        })?;
+                        LocalFileOps::copy_file(backup_path, original_path)?;
                         self.original.update_entry(original_path).with_context(|| {
                             format!("Failed to update original entry: {original_path:?}")
                         })?;
                     } else {
-                        fs::copy(original_path, backup_path).with_context(|| {
-                            format!("Failed to copy {original_path:?} to {backup_path:?}")
-                        })?;
+                        LocalFileOps::copy_file(original_path, backup_path)?;
                         self.backup.update_entry(backup_path).with_context(|| {
                             format!("Failed to update backup entry: {backup_path:?}")
                         })?;

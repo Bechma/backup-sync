@@ -1,9 +1,8 @@
+use crate::local_file_ops::LocalFileOps;
 use crate::origin::FileEntry;
-use crate::rsync::create_signature;
 use std::collections::hash_map::{Keys, Values};
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
 use std::path::PathBuf;
 
 #[derive(Debug)]
@@ -25,8 +24,8 @@ impl FolderStructure {
             let metadata = fs::metadata(&path)?;
 
             let sig = if metadata.is_file() {
-                let mut file = File::open(&path)?;
-                create_signature(&mut file)?
+                LocalFileOps::create_signature(&path)
+                    .map_err(|e| std::io::Error::other(e.to_string()))?
             } else {
                 Vec::new()
             };
@@ -58,8 +57,8 @@ impl FolderStructure {
     pub(crate) fn update_entry(&mut self, path: &PathBuf) -> std::io::Result<()> {
         let metadata = fs::metadata(path)?;
         let sig = if metadata.is_file() {
-            let mut file = File::open(path)?;
-            create_signature(&mut file)?
+            LocalFileOps::create_signature(path)
+                .map_err(|e| std::io::Error::other(e.to_string()))?
         } else {
             Vec::new()
         };

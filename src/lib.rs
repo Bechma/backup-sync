@@ -1,5 +1,5 @@
-pub mod local_origin;
+pub mod folder_structure;
+pub mod local_file_ops;
 pub mod origin;
-pub mod rsync;
 pub mod state;
 pub mod synchronizer;
