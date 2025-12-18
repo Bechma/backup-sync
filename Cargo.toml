@@ -6,12 +6,11 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.1", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 librsync = "0.2.5"
-notify = "8.2.0"
-notify-debouncer-full = "0.6.0"
-rayon = "1.11.0"
-fast_rsync = "0.2.0"
+notify = "8.2"
+notify-debouncer-full = "0.6"
+rayon = "1.11"
 
 walkdir = "2.5.0"
 fs2 = "0.4.3"

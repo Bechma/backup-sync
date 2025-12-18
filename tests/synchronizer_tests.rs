@@ -1026,3 +1026,217 @@ fn test_sync_all_options_combined() {
         "backup version"
     );
 }
+
+// ==================== CORRUPTED DATA TESTS ====================
+
+#[test]
+fn test_apply_delta_with_corrupted_data() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+
+    create_file(original_dir.path(), "file.txt", "original content");
+    create_file(backup_dir.path(), "file.txt", "backup content");
+
+    let mut syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+
+    // Corrupted delta data (random bytes that don't form a valid delta)
+    let corrupted_delta: Vec<u8> = vec![0xFF, 0xFE, 0xFD, 0xFC, 0x00, 0x01, 0x02, 0x03];
+
+    let result = syncer.handle_original_modified_apply_delta(&original_path, &corrupted_delta);
+    assert!(result.is_err());
+
+    // Verify backup file still exists (wasn't corrupted by failed operation)
+    assert!(backup_dir.path().join("file.txt").exists());
+}
+
+#[test]
+fn test_apply_delta_with_empty_data() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+
+    create_file(original_dir.path(), "file.txt", "original content");
+    create_file(backup_dir.path(), "file.txt", "backup content");
+
+    let mut syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+
+    // Empty delta should fail
+    let empty_delta: Vec<u8> = vec![];
+
+    let result = syncer.handle_original_modified_apply_delta(&original_path, &empty_delta);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_apply_delta_with_truncated_data() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+
+    create_file(original_dir.path(), "file.txt", "original content");
+    create_file(backup_dir.path(), "file.txt", "backup content");
+
+    let mut syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+
+    // Get a valid delta first
+    let valid_delta = syncer
+        .handle_original_modified_calculate_delta(&original_path)
+        .unwrap();
+
+    // Truncate the delta to make it invalid (if it has content)
+    if valid_delta.len() > 2 {
+        let truncated_delta = &valid_delta[..valid_delta.len() / 2];
+
+        let result = syncer.handle_original_modified_apply_delta(&original_path, truncated_delta);
+        assert!(result.is_err());
+    }
+}
+
+// ==================== PATH VALIDATION TESTS ====================
+
+#[test]
+fn test_get_backup_path_for_path_outside_original_root() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+    let outside_dir = TempDir::new().unwrap();
+
+    create_file(original_dir.path(), "file.txt", "content");
+
+    let syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    // Path completely outside the original root
+    let outside_path = outside_dir.path().join("outside.txt");
+
+    let result = syncer.get_backup_path(&outside_path);
+    assert!(result.is_none());
+}
+
+#[test]
+fn test_handle_original_created_path_outside_root() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+    let outside_dir = TempDir::new().unwrap();
+
+    create_file(outside_dir.path(), "outside.txt", "outside content");
+
+    let mut syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    let outside_path = fs::canonicalize(outside_dir.path().join("outside.txt")).unwrap();
+
+    // Attempting to handle a file outside the original root should fail
+    let result = syncer.handle_original_created(outside_path);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_handle_original_modified_path_outside_root() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+    let outside_dir = TempDir::new().unwrap();
+
+    create_file(outside_dir.path(), "outside.txt", "outside content");
+
+    let syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    let outside_path = fs::canonicalize(outside_dir.path().join("outside.txt")).unwrap();
+
+    // Attempting to calculate delta for file outside root should fail
+    let result = syncer.handle_original_modified_calculate_delta(&outside_path);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_handle_original_deleted_path_outside_root() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+
+    let mut syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    // Path that doesn't exist and is outside root
+    let outside_path = PathBuf::from("/some/random/path/outside.txt");
+
+    // Should succeed as no-op (file not tracked)
+    let result = syncer.handle_original_deleted(&outside_path);
+    assert!(result.is_ok());
+}
+
+#[test]
+fn test_handle_original_renamed_path_outside_root() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+    let outside_dir = TempDir::new().unwrap();
+
+    create_file(original_dir.path(), "file.txt", "content");
+
+    let mut syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    syncer.sync().unwrap();
+
+    let original_path = fs::canonicalize(original_dir.path().join("file.txt")).unwrap();
+    let outside_path = outside_dir.path().join("moved_outside.txt");
+
+    // Renaming to a path outside the root should fail
+    let result = syncer.handle_original_renamed(&original_path, &outside_path);
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_path_traversal_attempt() {
+    let original_dir = TempDir::new().unwrap();
+    let backup_dir = TempDir::new().unwrap();
+
+    create_file(original_dir.path(), "file.txt", "content");
+
+    let syncer = Synchronizer::new(
+        original_dir.path().to_path_buf(),
+        backup_dir.path().to_path_buf(),
+    )
+    .unwrap();
+
+    // Attempt path traversal with ..
+    let traversal_path = original_dir.path().join("subdir/../../../etc/passwd");
+
+    let result = syncer.get_backup_path(&traversal_path);
+    // The path won't match after canonicalization since it's outside root
+    // or will be None if strip_prefix fails
+    if let Some(backup_path) = result {
+        // If it returns a path, it should still be within backup_dir
+        assert!(backup_path.starts_with(backup_dir.path()) || !backup_path.exists());
+    }
+}

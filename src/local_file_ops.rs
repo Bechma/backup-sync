@@ -9,7 +9,7 @@ use librsync::whole::{delta, patch, signature};
 pub struct LocalFileOps;
 
 impl LocalFileOps {
-    pub fn open_for_read(path: &Path) -> Result<File> {
+    fn open_for_read(path: &Path) -> Result<File> {
         File::open(path).with_context(|| format!("Failed to open file for reading: {path:?}"))
     }
 
