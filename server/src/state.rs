@@ -20,14 +20,15 @@ pub struct ConnectedClient {
 pub struct ServerState {
     pub users: HashMap<UserId, User>,
     pub connections: HashMap<SocketAddr, ConnectedClient>,
-    /// Maps (user_id, computer_id) to socket address for routing
+    /// Maps (`user_id`, `computer_id`) to socket address for routing
     pub computer_connections: HashMap<(UserId, ComputerId), SocketAddr>,
-    /// Pending operations per folder: folder_id -> (operation_id, pending_acks)
+    /// Pending operations per folder: `folder_id` -> (`operation_id`, `pending_acks`)
     pub pending_operations: HashMap<FolderId, HashMap<u64, usize>>,
     pub operation_counter: u64,
 }
 
 impl ServerState {
+    #[must_use] 
     pub fn new() -> Self {
         Self::default()
     }
@@ -46,6 +47,7 @@ impl ServerState {
         })
     }
 
+    #[must_use] 
     pub fn get_user(&self, user_id: &UserId) -> Option<&User> {
         self.users.get(user_id)
     }
@@ -54,6 +56,7 @@ impl ServerState {
         self.users.get_mut(user_id)
     }
 
+    #[must_use] 
     pub fn get_folder(&self, user_id: &UserId, folder_id: &FolderId) -> Option<&SyncFolder> {
         self.users
             .get(user_id)?
@@ -74,6 +77,7 @@ impl ServerState {
             .find(|f| &f.id == folder_id)
     }
 
+    #[must_use] 
     pub fn is_folder_synced(&self, user_id: &UserId, folder_id: &FolderId) -> bool {
         self.get_folder(user_id, folder_id)
             .is_some_and(|f| f.is_synced && f.pending_operations == 0)
@@ -107,6 +111,7 @@ impl ServerState {
         self.connections.remove(addr)
     }
 
+    #[must_use] 
     pub fn get_connection(&self, addr: &SocketAddr) -> Option<&ConnectedClient> {
         self.connections.get(addr)
     }
@@ -188,6 +193,7 @@ impl ServerState {
         }
     }
 
+    #[must_use] 
     pub fn is_origin(
         &self,
         user_id: &UserId,
@@ -198,6 +204,7 @@ impl ServerState {
             .is_some_and(|f| &f.origin_computer == computer_id)
     }
 
+    #[must_use] 
     pub fn is_backup(
         &self,
         user_id: &UserId,
@@ -240,10 +247,10 @@ impl ServerState {
         }
     }
 
+    #[must_use] 
     pub fn get_backup_count(&self, user_id: &UserId, folder_id: &FolderId) -> usize {
         self.get_folder(user_id, folder_id)
-            .map(|f| f.backup_computers.len())
-            .unwrap_or(0)
+            .map_or(0, |f| f.backup_computers.len())
     }
 
     pub fn track_operation(
@@ -258,6 +265,7 @@ impl ServerState {
             .insert(operation_id, backup_count);
     }
 
+    #[must_use] 
     pub fn should_receive_broadcast(&self, addr: &SocketAddr, folder_id: &FolderId) -> bool {
         if let Some(conn) = self.connections.get(addr)
             && let (Some(user_id), Some(computer_id)) = (&conn.user_id, &conn.computer_id)
@@ -268,6 +276,7 @@ impl ServerState {
     }
 }
 
+#[must_use] 
 pub fn uuid_simple() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
