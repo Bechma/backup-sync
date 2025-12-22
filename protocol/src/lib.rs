@@ -55,10 +55,30 @@ pub enum FileOperation {
         from_relative: PathBuf,
         to_relative: PathBuf,
     },
-    /// Apply delta to modify a file (rsync-style)
+    /// Start a large file transfer (Chunked upload)
+    StartTransfer {
+        transfer_id: u64,
+        relative_path: PathBuf,
+        total_size: u64,
+    },
+    /// A chunk of data to modify a file (rsync-style)
+    FileChunk {
+        transfer_id: u64,
+        chunk_index: u64,
+        data: Vec<u8>, // Keep this under ~64KB
+    },
+    /// Sent when the delta generation is done.
+    /// The Backup accumulates all chunks, then applies the Delta logic using this info.
+    EndTransfer {
+        transfer_id: u64,
+        expected_hash: String, // The Authoritative Hash calculated by Origin
+    },
+    /// Apply delta (Modified to include integrity check)
     ApplyDelta {
+        transfer_id: u64,
         relative_path: PathBuf,
         delta: Vec<u8>,
+        expected_hash: String, // Hash of the file AFTER patch is applied
     },
     /// Request signature for a file (for delta calculation)
     RequestSignature { relative_path: PathBuf },
