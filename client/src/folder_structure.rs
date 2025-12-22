@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::{Keys, Values};
 use std::fs;
 use std::path::PathBuf;
+use tracing::instrument;
 
 #[derive(Debug)]
 pub(crate) struct FolderStructure {
@@ -12,6 +13,7 @@ pub(crate) struct FolderStructure {
 }
 
 impl FolderStructure {
+    #[instrument(skip(root))]
     pub(crate) fn new(root: impl Into<PathBuf>) -> std::io::Result<Self> {
         let root = fs::canonicalize(root.into())?;
         let mut entries = HashMap::new();
@@ -54,6 +56,7 @@ impl FolderStructure {
         self.entries.get(path)
     }
 
+    #[instrument(skip(self))]
     pub(crate) fn update_entry(&mut self, path: &PathBuf) -> std::io::Result<()> {
         let metadata = fs::metadata(path)?;
         let sig = if metadata.is_file() {
@@ -73,6 +76,7 @@ impl FolderStructure {
         self.entries.remove(path)
     }
 
+    #[instrument(skip(self))]
     pub(crate) fn get_relatives(&self) -> HashMap<PathBuf, PathBuf> {
         self.entries
             .keys()

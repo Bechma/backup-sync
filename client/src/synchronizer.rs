@@ -6,6 +6,7 @@ use crate::folder_structure::FolderStructure;
 use crate::local_file_ops::LocalFileOps;
 use crate::origin::FileEntry;
 use anyhow::{Context, Result, anyhow};
+use tracing::instrument;
 
 #[derive(Debug, Clone, Default)]
 pub struct SyncOptions {
@@ -90,6 +91,7 @@ impl Synchronizer {
             .map(FileEntry::signature)
     }
 
+    #[instrument(skip(self))]
     pub fn handle_original_modified_calculate_delta(
         &self,
         original_path: &PathBuf,
@@ -106,6 +108,7 @@ impl Synchronizer {
         Ok(dlt)
     }
 
+    #[instrument(skip(self, dlt))]
     pub fn handle_original_modified_apply_delta(
         &mut self,
         original_path: &PathBuf,
@@ -125,6 +128,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub fn handle_original_created(&mut self, original_path: PathBuf) -> Result<()> {
         let backup_path = self
             .get_backup_path(&original_path)
@@ -143,6 +147,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub fn handle_original_deleted(&mut self, original_path: &PathBuf) -> Result<()> {
         if self.options.when_delete_keep_backup {
             return Ok(());
@@ -156,6 +161,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub fn handle_original_renamed(
         &mut self,
         from_path: &PathBuf,
@@ -183,6 +189,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     pub fn sync(&mut self) -> Result<()> {
         let _locks = self
             .acquire_locks()
@@ -201,6 +208,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn acquire_locks(&self) -> Result<Vec<File>> {
         let mut locks = Vec::new();
 
@@ -223,6 +231,7 @@ impl Synchronizer {
         Ok(locks)
     }
 
+    #[instrument(skip(self, original_relatives, backup_relatives))]
     fn sync_missing_in_backup(
         &mut self,
         original_relatives: &HashMap<PathBuf, PathBuf>,
@@ -249,6 +258,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self, original_relatives, backup_relatives))]
     fn sync_extra_in_backup(
         &mut self,
         original_relatives: &HashMap<PathBuf, PathBuf>,
@@ -275,6 +285,7 @@ impl Synchronizer {
         Ok(())
     }
 
+    #[instrument(skip(self, original_relatives, backup_relatives))]
     fn sync_conflicts(
         &mut self,
         original_relatives: &HashMap<PathBuf, PathBuf>,

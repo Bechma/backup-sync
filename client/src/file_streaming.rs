@@ -7,6 +7,7 @@ use std::io::{self, BufReader, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use tempfile::NamedTempFile;
+use tracing::{info, instrument};
 
 // A helper struct to calculate Hash while reading (Pass-through Reader)
 struct HashingReader<R> {
@@ -108,6 +109,7 @@ impl Write for ChunkedDeltaWriter {
     }
 }
 
+#[instrument(skip(signature_data, tx))]
 pub fn generate_delta_streamed(
     path: PathBuf,
     signature_data: Vec<u8>,
@@ -177,6 +179,7 @@ pub fn generate_delta_streamed(
     Ok(())
 }
 
+#[instrument(skip(delta))]
 pub fn apply_delta_securely(
     base_path: &Path,
     relative_path: &Path,
@@ -224,7 +227,7 @@ pub fn apply_delta_securely(
     // This replaces the old file with the new one instantly
     temp_file.persist(&target_file_path).map_err(|e| e.error)?;
 
-    println!("Successfully patched and verified: {:?}", relative_path);
+    info!("Successfully patched and verified: {:?}", relative_path);
     Ok(())
 }
 

@@ -6,6 +6,7 @@ use notify_debouncer_full::DebouncedEvent;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 use std::sync::RwLock;
+use tracing::{debug, info, instrument};
 
 pub struct AppState {
     syncer: RwLock<Synchronizer>,
@@ -33,6 +34,7 @@ impl AppState {
         Ok(Self::new(syncer))
     }
 
+    #[instrument(skip(self))]
     pub fn process_debounced_event(&self, event: &DebouncedEvent) -> Result<()> {
         match event.kind {
             EventKind::Modify(ModifyKind::Data(_)) => {
@@ -63,6 +65,7 @@ impl AppState {
         Ok(())
     }
 
+    #[instrument(skip(self))]
     fn process_modified_path(&self, original_path: &PathBuf) -> Result<()> {
         let delta = self
             .syncer
@@ -71,10 +74,10 @@ impl AppState {
             .handle_original_modified_calculate_delta(original_path)
             .with_context(|| format!("Failed to calculate delta for: {original_path:?}"))?;
         if delta.is_empty() {
-            println!("file hasn't changed: {original_path:?}");
+            debug!("file hasn't changed: {original_path:?}");
             return Ok(());
         }
-        println!("file changed: {original_path:?}");
+        info!("file changed: {original_path:?}");
         self.syncer
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock on syncer: {e}"))?
@@ -82,8 +85,9 @@ impl AppState {
             .with_context(|| format!("Failed to apply delta for: {original_path:?}"))
     }
 
+    #[instrument(skip(self))]
     fn process_create_path(&self, original_path: &PathBuf) -> Result<()> {
-        println!("created file: {original_path:?}");
+        info!("created file: {original_path:?}");
         self.syncer
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock on syncer: {e}"))?
@@ -91,8 +95,9 @@ impl AppState {
             .with_context(|| format!("Failed to handle created file: {original_path:?}"))
     }
 
+    #[instrument(skip(self))]
     fn process_delete_path(&self, original_path: &PathBuf) -> Result<()> {
-        println!("deleted file: {original_path:?}");
+        info!("deleted file: {original_path:?}");
         self.syncer
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock on syncer: {e}"))?
@@ -100,8 +105,9 @@ impl AppState {
             .with_context(|| format!("Failed to handle deleted file: {original_path:?}"))
     }
 
+    #[instrument(skip(self))]
     fn process_rename_path(&self, from_path: &PathBuf, to_path: &PathBuf) -> Result<()> {
-        println!("renamed file: {from_path:?} -> {to_path:?}");
+        info!("renamed file: {from_path:?} -> {to_path:?}");
         self.syncer
             .write()
             .map_err(|e| anyhow::anyhow!("Failed to acquire write lock on syncer: {e}"))?

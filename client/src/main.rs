@@ -25,6 +25,8 @@ pub struct Cli {
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
+
     let (tx, rx) = std::sync::mpsc::channel();
     let mut debouncer = new_debouncer(std::time::Duration::from_millis(200), None, tx).unwrap();
 
@@ -47,7 +49,7 @@ fn main() {
                         .par_iter()
                         .for_each(|x| global_state.process_debounced_event(x).unwrap());
                 }
-                Err(e) => println!("watch error: {e:?}"),
+                Err(e) => tracing::error!("watch error: {e:?}"),
             }
         }
     }

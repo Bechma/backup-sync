@@ -5,6 +5,7 @@ use std::path::Path;
 use anyhow::{Context, Result, anyhow};
 use fs2::FileExt;
 use librsync::whole::{delta, patch, signature};
+use tracing::instrument;
 
 pub struct LocalFileOps;
 
@@ -13,6 +14,7 @@ impl LocalFileOps {
         File::open(path).with_context(|| format!("Failed to open file for reading: {path:?}"))
     }
 
+    #[instrument(skip(dlt))]
     pub fn handle_original_modified_apply_delta(backup_path: &Path, dlt: &[u8]) -> Result<()> {
         let mut old_file = LocalFileOps::open_for_read_write(backup_path)?;
 
@@ -28,10 +30,12 @@ impl LocalFileOps {
             .with_context(|| format!("Failed to open file for read/write: {path:?}"))
     }
 
+    #[instrument]
     pub fn create_dir_all(path: &Path) -> Result<()> {
         fs::create_dir_all(path).with_context(|| format!("Failed to create directory: {path:?}"))
     }
 
+    #[instrument]
     pub fn copy_file(from: &Path, to: &Path) -> Result<u64> {
         if let Some(parent) = to.parent() {
             Self::create_dir_all(parent)?;
@@ -39,6 +43,7 @@ impl LocalFileOps {
         fs::copy(from, to).with_context(|| format!("Failed to copy {from:?} to {to:?}"))
     }
 
+    #[instrument]
     pub fn rename_file(from: &Path, to: &Path) -> Result<()> {
         if !from.exists() {
             return Err(anyhow!(
@@ -51,6 +56,7 @@ impl LocalFileOps {
         fs::rename(from, to).with_context(|| format!("Failed to rename {from:?} to {to:?}"))
     }
 
+    #[instrument]
     pub fn remove_file(path: &Path) -> Result<()> {
         if !path.exists() {
             return Ok(());
@@ -58,10 +64,12 @@ impl LocalFileOps {
         fs::remove_file(path).with_context(|| format!("Failed to remove file: {path:?}"))
     }
 
+    #[instrument]
     pub fn remove_dir_all(path: &Path) -> Result<()> {
         fs::remove_dir_all(path).with_context(|| format!("Failed to remove directory: {path:?}"))
     }
 
+    #[instrument]
     pub fn lock_shared(path: &Path) -> Result<File> {
         let file = Self::open_for_read(path)?;
         file.lock_shared()
@@ -69,6 +77,7 @@ impl LocalFileOps {
         Ok(file)
     }
 
+    #[instrument]
     pub fn lock_exclusive(path: &Path) -> Result<File> {
         let file = Self::open_for_read_write(path)?;
         file.lock_exclusive()
@@ -85,6 +94,7 @@ impl LocalFileOps {
             .with_context(|| format!("Failed to sync file: {path:?}"))
     }
 
+    #[instrument]
     pub fn create_signature(path: &Path) -> Result<Vec<u8>> {
         let mut file = Self::open_for_read(path)?;
         let mut sig = Vec::<u8>::new();
@@ -94,6 +104,7 @@ impl LocalFileOps {
         Ok(sig)
     }
 
+    #[instrument(skip(old_sig))]
     pub fn calculate_delta(old_sig: &[u8], path: &Path) -> Result<Vec<u8>> {
         let mut new_file = Self::open_for_read(path)?;
         new_file
