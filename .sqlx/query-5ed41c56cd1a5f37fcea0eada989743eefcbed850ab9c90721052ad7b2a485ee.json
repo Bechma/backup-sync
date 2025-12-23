@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO folder_backups (folder_id, computer_id) VALUES (?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "5ed41c56cd1a5f37fcea0eada989743eefcbed850ab9c90721052ad7b2a485ee"
+}

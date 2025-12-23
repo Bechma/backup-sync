@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT DISTINCT f.id, f.name, f.origin_computer_id, f.is_synced, f.pending_operations \n        FROM folders f\n        LEFT JOIN folder_backups fb ON f.id = fb.folder_id\n        WHERE f.origin_computer_id = ? OR fb.computer_id = ?\n    ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "origin_computer_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_synced",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "pending_operations",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "2d0cbbe6fa5d7728f5068e3969ed856717ce45e55002f476dd6740626306a9db"
+}

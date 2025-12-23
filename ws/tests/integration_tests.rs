@@ -3,10 +3,10 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use backup_sync_protocol::{ClientMessage, Computer, FileOperation, ServerMessage, SyncFolder};
-use backup_sync_ws::server::{run_server, ServerConfig};
+use backup_sync_ws::server::{ServerConfig, run_server};
 use backup_sync_ws::state::ServerState;
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::{oneshot, RwLock};
+use tokio::sync::{RwLock, oneshot};
 use tokio::time::timeout;
 use tokio_tungstenite::tungstenite::Message;
 

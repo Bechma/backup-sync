@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO computers (id, user_id, name, online) VALUES (?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "050c62c30fad747b9e246a67b5ce6602eca821c8cd3f70326c0c2b41075fab97"
+}

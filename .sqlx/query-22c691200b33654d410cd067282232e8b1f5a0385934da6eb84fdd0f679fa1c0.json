@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM folder_backups WHERE folder_id = ? AND computer_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "22c691200b33654d410cd067282232e8b1f5a0385934da6eb84fdd0f679fa1c0"
+}

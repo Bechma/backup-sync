@@ -1,5 +1,5 @@
 use anyhow::Result;
-use backup_sync_ws::server::{run_server, ServerConfig};
+use backup_sync_ws::server::{ServerConfig, run_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {

@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT computer_id FROM folder_backups WHERE folder_id = ?",
+  "describe": {
+    "columns": [
+      {
+        "name": "computer_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b6582274fdedb5b1c889752ed388cfc9a43f4f78183b19ab2680d964c354d16e"
+}

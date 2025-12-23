@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT f.id, f.name, f.origin_computer_id, f.is_synced, f.pending_operations \n        FROM folders f\n        JOIN computers c ON f.origin_computer_id = c.id\n        WHERE c.user_id = ?\n    ",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "origin_computer_id",
+        "ordinal": 2,
+        "type_info": "Text"
+      },
+      {
+        "name": "is_synced",
+        "ordinal": 3,
+        "type_info": "Bool"
+      },
+      {
+        "name": "pending_operations",
+        "ordinal": 4,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "716fd47145f52eeef4b55622494fd06b59790975f3833b3d4144efcb20b5d111"
+}

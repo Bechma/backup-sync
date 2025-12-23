@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "\n        SELECT c.user_id\n        FROM folders f\n        JOIN computers c ON f.origin_computer_id = c.id\n        WHERE f.id = ?\n    ",
+  "describe": {
+    "columns": [
+      {
+        "name": "user_id",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "26b8df0e999c8b7e946cb43061eaa41f74613465b223f13f07009757e3013e78"
+}

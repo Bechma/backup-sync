@@ -1,5 +1,5 @@
 [workspace]
-members = ["client", "ws", "protocol"]
+members = ["client", "ws", "protocol", "server"]
 resolver = "3"
 
 [workspace.package]
@@ -10,8 +10,11 @@ license = "AGPL-3"
 [workspace.dependencies]
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
+
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+uuid = { version = "1.19", features = ["v4", "serde"] }
+
 tokio = { version = "1", features = ["full"] }
 tokio-tungstenite = "0.28"
 futures-util = "0.3"
