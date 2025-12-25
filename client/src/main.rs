@@ -1,17 +1,22 @@
 use backup_sync_client::state;
 use backup_sync_client::synchronizer::SyncOptions;
-use clap::Parser;
+use clap::{ArgGroup, Parser};
 use notify::RecursiveMode;
 use notify_debouncer_full::new_debouncer;
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::path::PathBuf;
 
 #[derive(Parser)]
-#[command(about, version)]
+#[command(
+    about,
+    version,
+    group = ArgGroup::new("sources").required(true),
+    group = ArgGroup::new("backups").required(true),
+)]
 pub struct Cli {
-    #[arg(short, long, value_name = "DIR")]
+    #[arg(short, long, value_name = "DIR", group = "sources")]
     source_local: Option<PathBuf>,
-    #[arg(short, long, value_name = "DIR")]
+    #[arg(short, long, value_name = "DIR", group = "backups")]
     backup_local: Option<PathBuf>,
 
     #[arg(long, default_value_t = false)]
