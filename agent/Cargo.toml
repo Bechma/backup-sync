@@ -1,0 +1,22 @@
+[package]
+name = "agent"
+version = "0.1.0"
+description = { workspace = true }
+edition = { workspace = true }
+license = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Storage_FileSystem"] }
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+uuid = { workspace = true }
+time = { version = "0.3.44", features = ["serde", "formatting", "parsing"] }
+thiserror = "2.0"
+filetime = "0.2"
+blake3 = { version = "1.8", features = ["serde"] }
+libsync3 = "0.1"
+tempfile = "3.14"
+postcard = { version = "1.1", features = ["alloc"] }
+unicode-normalization = "0.1"
