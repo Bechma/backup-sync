@@ -2,25 +2,24 @@ use std::collections::HashMap;
 
 use crate::models::Folder;
 use crate::protocol::{FolderId, FolderOperation};
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 pub struct FolderRepo {
     folders: HashMap<FolderId, Folder>,
 }
 
+impl Default for FolderRepo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl FolderRepo {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             folders: HashMap::new(),
         }
-    }
-
-    pub fn get(&self, folder_id: &FolderId) -> Option<&Folder> {
-        self.folders.get(folder_id)
-    }
-
-    pub fn get_mut(&mut self, folder_id: &FolderId) -> Option<&mut Folder> {
-        self.folders.get_mut(folder_id)
     }
 
     pub fn insert(&mut self, folder_id: FolderId, folder: Folder) -> Option<Folder> {
@@ -43,7 +42,7 @@ impl FolderRepo {
             } => self
                 .folders
                 .get(&folder_id)
-                .ok_or(anyhow::anyhow!("Folder not found"))?
+                .context("Folder not found")?
                 .process_operation(operation),
             FolderOperation::RequestSync { folder_id: _ } => {
                 todo!("Not implemented")

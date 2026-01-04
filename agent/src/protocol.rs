@@ -1,19 +1,9 @@
 use crate::models::{FileMetadata, RelativePath};
 use blake3::Hash;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 pub type FolderId = uuid::Uuid;
 pub type OperationId = u64;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Folder {
-    pub id: FolderId,
-    pub name: String,
-    pub path: PathBuf,
-    pub last_successful_sync: time::OffsetDateTime,
-    pub pending_operations: u64,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FileOperation {

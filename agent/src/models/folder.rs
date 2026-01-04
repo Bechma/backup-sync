@@ -13,7 +13,6 @@ pub struct Folder {
     name: String,
     path: PathBuf,
     last_successful_sync: OffsetDateTime,
-    pending_operations: u64,
 }
 
 impl Folder {
@@ -49,11 +48,10 @@ impl Folder {
 
         if to_path.exists() {
             let filename = format!(
-                "{}_{}",
+                "{}_{}_conflict",
                 to_path
                     .file_name()
-                    .map(|x| x.to_str())
-                    .flatten()
+                    .and_then(|x| x.to_str())
                     .context("Failed to get file name")?,
                 time::OffsetDateTime::now_utc(),
             );

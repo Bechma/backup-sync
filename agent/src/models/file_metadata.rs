@@ -148,12 +148,11 @@ impl FileMetadata {
     }
 
     pub fn from_path(path: &Path) -> Result<Self, FileMetadataError> {
-        let metadata = std::fs::metadata(path)?;
-        Self::from_std_metadata(&metadata, path)
-    }
-
-    pub fn from_path_no_follow(path: &Path) -> Result<Self, FileMetadataError> {
-        let metadata = std::fs::symlink_metadata(path)?;
+        let metadata = if path.is_symlink() {
+            std::fs::symlink_metadata(path)?
+        } else {
+            std::fs::metadata(path)?
+        };
         Self::from_std_metadata(&metadata, path)
     }
 
@@ -272,86 +271,6 @@ impl FileMetadata {
         self.symlink_target.as_deref()
     }
 
-    // Setters
-    pub fn set_file_type(&mut self, file_type: FileType) {
-        self.file_type = file_type;
-    }
-
-    pub fn set_size(&mut self, size: u64) {
-        self.size = size;
-    }
-
-    pub fn set_permissions(&mut self, permissions: Permissions) {
-        self.permissions = permissions;
-    }
-
-    pub fn set_mtime(&mut self, mtime: OffsetDateTime) {
-        self.mtime = mtime;
-    }
-
-    pub fn set_ctime(&mut self, ctime: Option<OffsetDateTime>) {
-        self.ctime = ctime;
-    }
-
-    pub fn set_symlink_target(&mut self, target: Option<String>) {
-        self.symlink_target = target;
-    }
-
-    // Builder methods
-    #[must_use]
-    pub fn with_ctime(mut self, ctime: OffsetDateTime) -> Self {
-        self.ctime = Some(ctime);
-        self
-    }
-
-    #[must_use]
-    pub fn with_symlink_target(mut self, target: impl Into<String>) -> Self {
-        self.symlink_target = Some(target.into());
-        self
-    }
-
-    #[must_use]
-    pub fn with_permissions(mut self, permissions: Permissions) -> Self {
-        self.permissions = permissions;
-        self
-    }
-
-    // Convenience constructors
-    #[must_use]
-    pub fn new_file(size: u64) -> Self {
-        Self {
-            file_type: FileType::File,
-            size,
-            permissions: Permissions::default_file(),
-            mtime: OffsetDateTime::now_utc(),
-            ctime: Some(OffsetDateTime::now_utc()),
-            symlink_target: None,
-        }
-    }
-
-    #[must_use]
-    pub fn new_directory() -> Self {
-        Self {
-            file_type: FileType::Directory,
-            size: 0,
-            permissions: Permissions::default_directory(),
-            mtime: OffsetDateTime::now_utc(),
-            ctime: Some(OffsetDateTime::now_utc()),
-            symlink_target: None,
-        }
-    }
-
-    pub fn new_symlink(target: impl Into<String>) -> Self {
-        Self {
-            file_type: FileType::Symlink,
-            size: 0,
-            permissions: Permissions::from_mode(0o777),
-            mtime: OffsetDateTime::now_utc(),
-            ctime: Some(OffsetDateTime::now_utc()),
-            symlink_target: Some(target.into()),
-        }
-    }
-
     // Type checks
     #[must_use]
     pub fn is_file(&self) -> bool {
@@ -366,25 +285,6 @@ impl FileMetadata {
     #[must_use]
     pub fn is_symlink(&self) -> bool {
         self.file_type == FileType::Symlink
-    }
-
-    // Comparison helpers
-    #[must_use]
-    pub fn differs_from(&self, other: &Self) -> bool {
-        self.file_type != other.file_type
-            || self.size != other.size
-            || self.permissions.mode != other.permissions.mode
-            || self.mtime != other.mtime
-            || self.symlink_target != other.symlink_target
-    }
-
-    #[must_use]
-    pub fn only_times_differ(&self, other: &Self) -> bool {
-        self.file_type == other.file_type
-            && self.size == other.size
-            && self.permissions.mode == other.permissions.mode
-            && self.symlink_target == other.symlink_target
-            && self.mtime != other.mtime
     }
 
     // Apply metadata to filesystem
@@ -460,12 +360,6 @@ impl FileMetadata {
     }
 }
 
-impl Default for FileMetadata {
-    fn default() -> Self {
-        Self::new_file(0)
-    }
-}
-
 fn system_time_to_offset(
     time: std::time::SystemTime,
 ) -> Result<OffsetDateTime, time::error::ComponentRange> {
@@ -494,17 +388,6 @@ mod tests {
     }
 
     #[test]
-    fn test_metadata_builder() {
-        let meta = FileMetadata::new_file(1024)
-            .with_ctime(OffsetDateTime::now_utc())
-            .with_permissions(Permissions::from_mode(0o600));
-
-        assert_eq!(meta.size(), 1024);
-        assert!(meta.ctime().is_some());
-        assert_eq!(meta.permissions().mode(), 0o600);
-    }
-
-    #[test]
     fn test_read_file_metadata() {
         let dir = TempDir::new().unwrap();
         let file_path = dir.path().join("test.txt");
@@ -520,7 +403,12 @@ mod tests {
 
     #[test]
     fn test_serde_roundtrip() {
-        let meta = FileMetadata::new_file(1024);
+        let meta = FileMetadata::new(
+            FileType::File,
+            1024,
+            Permissions::default_file(),
+            OffsetDateTime::now_utc(),
+        );
         let json = postcard::to_allocvec(&meta).unwrap();
         let deserialized: FileMetadata = postcard::from_bytes(&json).unwrap();
 
@@ -537,7 +425,12 @@ mod tests {
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"test").unwrap();
 
-        let meta = FileMetadata::new_file(4).with_permissions(Permissions::from_mode(0o755));
+        let meta = FileMetadata::new(
+            FileType::File,
+            4,
+            Permissions::from_mode(0o755),
+            OffsetDateTime::now_utc(),
+        );
         meta.apply_permissions(&file_path).unwrap();
 
         let new_meta = std::fs::metadata(&file_path).unwrap();

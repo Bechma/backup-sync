@@ -81,25 +81,14 @@ impl RelativePath {
         Ok(Self(clean_components.join("/")))
     }
 
-    /// Create from a native Path, relative to a base directory
-    pub fn from_path(path: &Path, base: &Path) -> Result<Self, RelativePathError> {
-        let relative = path
-            .strip_prefix(base)
-            .map_err(|_| RelativePathError::Absolute(path.display().to_string()))?;
-
-        let s = relative.to_str().ok_or(RelativePathError::InvalidUtf8)?;
-
-        Self::new(s)
-    }
-
     /// Convert to native `PathBuf`, sanitizing for the current OS
-    #[must_use] 
+    #[must_use]
     pub fn to_path_buf(&self) -> PathBuf {
         PathBuf::from(self.to_native_string())
     }
 
     /// Convert to native path string, sanitizing for the current OS
-    #[must_use] 
+    #[must_use]
     pub fn to_native_string(&self) -> String {
         #[cfg(windows)]
         {
@@ -134,7 +123,7 @@ impl RelativePath {
     }
 
     /// Resolve against a base directory (uses native path format)
-    #[must_use] 
+    #[must_use]
     pub fn resolve(&self, base: &Path) -> PathBuf {
         base.join(self.to_path_buf())
     }
@@ -143,12 +132,6 @@ impl RelativePath {
     pub fn has_windows_incompatible_chars(&self) -> bool {
         self.0.chars().any(|c| WINDOWS_FORBIDDEN.contains(&c))
             || self.0.split('/').any(is_windows_reserved)
-    }
-
-    /// Get the file name component
-    #[must_use] 
-    pub fn file_name(&self) -> Option<&str> {
-        self.0.rsplit('/').next()
     }
 
     /// Join with another relative path component
@@ -223,27 +206,9 @@ impl TryFrom<PathBuf> for RelativePath {
     }
 }
 
-impl std::fmt::Display for RelativePath {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
 impl AsRef<str> for RelativePath {
     fn as_ref(&self) -> &str {
         &self.0
-    }
-}
-
-impl PartialOrd for RelativePath {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-impl Ord for RelativePath {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.0.cmp(&other.0)
     }
 }
 
