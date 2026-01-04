@@ -38,17 +38,17 @@ pub enum FileOperation {
 pub enum ChunkedTransferOp {
     Start {
         id: u64,
-        path: RelativePath,
         total_size: u64,
-        total_chunks: u64,
     },
     Chunk {
         id: u64,
-        index: u64,
+        index: u32,
+        chunk_size: u32,
         data: Vec<u8>,
     },
     End {
         id: u64,
+        path: RelativePath,
         hash: Hash,
         metadata: FileMetadata,
     },
