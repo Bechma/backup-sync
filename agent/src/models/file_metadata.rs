@@ -38,6 +38,7 @@ pub struct Permissions {
 }
 
 impl Permissions {
+    #[must_use]
     pub fn new(mode: u32, readonly: bool, hidden: bool) -> Self {
         Self {
             mode: mode & 0o7777,
@@ -46,6 +47,7 @@ impl Permissions {
         }
     }
 
+    #[must_use]
     pub fn from_mode(mode: u32) -> Self {
         Self {
             mode: mode & 0o7777,
@@ -54,6 +56,7 @@ impl Permissions {
         }
     }
 
+    #[must_use]
     pub fn default_file() -> Self {
         Self {
             mode: 0o644,
@@ -62,6 +65,7 @@ impl Permissions {
         }
     }
 
+    #[must_use]
     pub fn default_directory() -> Self {
         Self {
             mode: 0o755,
@@ -70,14 +74,17 @@ impl Permissions {
         }
     }
 
+    #[must_use]
     pub fn mode(self) -> u32 {
         self.mode
     }
 
+    #[must_use]
     pub fn readonly(self) -> bool {
         self.readonly
     }
 
+    #[must_use]
     pub fn hidden(self) -> bool {
         self.hidden
     }
@@ -94,16 +101,19 @@ impl Permissions {
         self.hidden = hidden;
     }
 
+    #[must_use]
     pub fn with_mode(mut self, mode: u32) -> Self {
         self.set_mode(mode);
         self
     }
 
+    #[must_use]
     pub fn with_readonly(mut self, readonly: bool) -> Self {
         self.readonly = readonly;
         self
     }
 
+    #[must_use]
     pub fn with_hidden(mut self, hidden: bool) -> Self {
         self.hidden = hidden;
         self
@@ -156,7 +166,7 @@ impl FileMetadata {
         Self::from_std_metadata(&metadata, path)
     }
 
-    fn from_std_metadata(metadata: &Metadata, path: &Path) -> Result<Self, FileMetadataError> {
+    pub fn from_std_metadata(metadata: &Metadata, path: &Path) -> Result<Self, FileMetadataError> {
         let file_type = if metadata.is_symlink() {
             FileType::Symlink
         } else if metadata.is_dir() {

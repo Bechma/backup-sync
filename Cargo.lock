@@ -1374,11 +1374,12 @@ dependencies = [
 
 [[package]]
 name = "libsync3"
-version = "0.1.0"
+version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "408f528034ce03afcaa157aff47b95545d8d6ff9b36d04d35241d9d0a3e08fe6"
+checksum = "09e84896e48bee7fab79eec10a871c2820d6cff04df602c61137d978be1d75f1"
 dependencies = [
  "blake3",
+ "serde",
 ]
 
 [[package]]

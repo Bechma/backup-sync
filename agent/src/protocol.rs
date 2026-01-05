@@ -1,6 +1,7 @@
 use crate::models::{FileMetadata, RelativePath};
 use blake3::Hash;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 pub type FolderId = uuid::Uuid;
 pub type OperationId = u64;
@@ -63,16 +64,14 @@ pub enum DeltaSyncOp {
     RequestSignature {
         path: RelativePath,
     },
-    Signature {
+    RequestDelta {
         path: RelativePath,
-        signature: Vec<u8>,
-        hash: Hash,
+        signature: libsync3::Signature,
     },
-    Delta {
-        id: u64,
+    ApplyDelta {
         path: RelativePath,
-        delta: Vec<u8>,
-        expected_hash: Hash,
+        delta: libsync3::Delta,
+        hash: Hash,
     },
 }
 
@@ -92,9 +91,26 @@ pub enum FolderOperation {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub enum FolderResponse {
+    SyncManifest(SyncManifest),
+    Signature {
+        path: RelativePath,
+        signature: libsync3::Signature,
+        hash: Hash,
+    },
+    Delta {
+        id: u64,
+        path: RelativePath,
+        delta: libsync3::Delta,
+        hash: Hash,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
     Control(ControlMessage),
     FolderOperation(FolderOperation),
+    FolderResponse(FolderResponse),
     Ack {
         operation_id: OperationId,
     },
@@ -110,6 +126,8 @@ pub enum ServerMessage {
     Control(ControlMessage),
     /// Forward operation to backup clients
     FolderOperation(FolderOperation),
+    /// Response to folder operation
+    FolderResponse(FolderResponse),
     /// Operation acknowledged by all backups
     Ack {
         operation_id: OperationId,
@@ -133,4 +151,21 @@ pub enum ControlMessage {
     Pong(u64),
     Pause, // Backpressure
     Resume,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SyncManifest {
+    pub folder_id: FolderId,
+    pub version: u64,
+    pub timestamp: i64,
+    pub files: HashMap<RelativePath, FileEntry>,
+    pub total_size: u64,
+    pub file_count: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileEntry {
+    pub hash: Hash,
+    pub metadata: FileMetadata,
+    pub chunks: libsync3::Signature,
 }

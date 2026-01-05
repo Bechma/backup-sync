@@ -1,5 +1,5 @@
 use super::{FileMetadata, RelativePath};
-use crate::protocol::{ChunkedTransferOp, FileOperation, FolderId};
+use crate::protocol::{ChunkedTransferOp, FileEntry, FileOperation, FolderId, SyncManifest};
 use anyhow::{Context, Result, bail};
 use blake3::Hash;
 use serde::{Deserialize, Serialize};
@@ -33,22 +33,133 @@ pub struct Folder {
     id: FolderId,
     name: String,
     path: PathBuf,
-    last_successful_sync: OffsetDateTime,
     #[serde(skip, default = "default_transfer_states")]
     transfer_states: Arc<Mutex<HashMap<u64, TransferState>>>,
 }
 
 impl Folder {
+    #[must_use]
+    pub fn new(id: FolderId, name: String, path: PathBuf) -> Self {
+        Self {
+            id,
+            name,
+            path,
+            transfer_states: default_transfer_states(),
+        }
+    }
+
+    #[must_use]
+    pub fn id(&self) -> &FolderId {
+        &self.id
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
+
     fn lock_transfer_states(
         &self,
     ) -> Result<std::sync::MutexGuard<'_, HashMap<u64, TransferState>>> {
         self.transfer_states
             .lock()
-            .map_err(|e| anyhow::anyhow!("Transfer states mutex poisoned: {}", e))
+            .map_err(|e| anyhow::anyhow!("Transfer states mutex poisoned: {e}"))
     }
 
     fn resolve(&self, path: &RelativePath) -> PathBuf {
         path.resolve(&self.path)
+    }
+
+    pub fn generate_manifest(&self, chunk_size: u64) -> Result<SyncManifest> {
+        let mut files = HashMap::new();
+        let mut total_size = 0u64;
+        let mut file_count = 0u64;
+
+        self.walk_directory(
+            &self.path,
+            &mut files,
+            &mut total_size,
+            &mut file_count,
+            chunk_size,
+        )
+        .context("Failed to walk directory")?;
+
+        Ok(SyncManifest {
+            folder_id: self.id,
+            version: 1,
+            timestamp: OffsetDateTime::now_utc().unix_timestamp(),
+            files,
+            total_size,
+            file_count,
+        })
+    }
+
+    fn walk_directory(
+        &self,
+        dir: &PathBuf,
+        files: &mut HashMap<RelativePath, FileEntry>,
+        total_size: &mut u64,
+        file_count: &mut u64,
+        chunk_size: u64,
+    ) -> Result<()> {
+        if !dir.exists() {
+            return Ok(());
+        }
+
+        for entry in fs::read_dir(dir).context("Failed to read directory")? {
+            let entry = entry.context("Failed to read directory entry")?;
+            let path = entry.path();
+            let metadata = entry.metadata().context("Failed to read metadata")?;
+
+            if metadata.is_dir() {
+                self.walk_directory(&path, files, total_size, file_count, chunk_size)?;
+            } else if metadata.is_file() {
+                let relative_path = path
+                    .strip_prefix(&self.path)
+                    .context("Failed to strip prefix")?
+                    .to_str()
+                    .context("Failed to convert path to string")?;
+                let relative_path = RelativePath::new(relative_path)?;
+
+                let file_size = metadata.len();
+                let file_metadata = FileMetadata::from_std_metadata(&metadata, &path)?;
+                let hash = hash_file(&path)?;
+
+                let chunks = if file_size > chunk_size {
+                    self.generate_chunk_info(&path, chunk_size)?
+                } else {
+                    libsync3::Signature {
+                        chunk_size: file_size as usize,
+                        chunks: vec![libsync3::ChunkSignature { index: 0, hash }],
+                    }
+                };
+
+                files.insert(
+                    relative_path,
+                    FileEntry {
+                        hash,
+                        metadata: file_metadata,
+                        chunks,
+                    },
+                );
+
+                *total_size += file_size;
+                *file_count += 1;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn generate_chunk_info(&self, path: &PathBuf, chunk_size: u64) -> Result<libsync3::Signature> {
+        let file = fs::File::open(path).context("Failed to open file")?;
+        libsync3::signature_with_chunk_size(file, chunk_size as usize)
+            .map_err(|e| anyhow::anyhow!("Failed to generate signature: {}", e))
     }
 
     fn process_delete(&self, path: &RelativePath) -> Result<()> {
@@ -341,15 +452,14 @@ mod tests {
     use crate::protocol::ChunkedTransferOp;
     use tempfile::tempdir;
 
-    fn create_test_folder() -> Folder {
+    fn create_test_folder() -> (Folder, tempfile::TempDir) {
         let temp_dir = tempdir().unwrap();
-        Folder {
-            id: uuid::Uuid::new_v4(),
-            name: "test_folder".to_string(),
-            path: temp_dir.path().to_path_buf(),
-            last_successful_sync: OffsetDateTime::now_utc(),
-            transfer_states: Arc::new(Mutex::new(HashMap::new())),
-        }
+        let folder = Folder::new(
+            uuid::Uuid::new_v4(),
+            "test_folder".to_string(),
+            temp_dir.path().to_path_buf(),
+        );
+        (folder, temp_dir)
     }
 
     fn create_dummy_metadata() -> FileMetadata {
@@ -362,8 +472,84 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_manifest_empty_folder() -> Result<()> {
+        let (folder, _temp) = create_test_folder();
+        let manifest = folder.generate_manifest(1024)?;
+
+        assert_eq!(manifest.files.len(), 0);
+        assert_eq!(manifest.total_size, 0);
+        assert_eq!(manifest.file_count, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_manifest_single_file() -> Result<()> {
+        let (folder, _temp) = create_test_folder();
+        let file_path = folder.path.join("test.txt");
+        fs::write(&file_path, "Hello World")?;
+
+        let manifest = folder.generate_manifest(1024)?;
+
+        assert_eq!(manifest.files.len(), 1);
+        assert_eq!(manifest.total_size, 11);
+        assert_eq!(manifest.file_count, 1);
+
+        let relative_path = RelativePath::new("test.txt")?;
+        let entry = manifest.files.get(&relative_path).unwrap();
+        assert_eq!(entry.metadata.size(), 11);
+        assert_eq!(entry.chunks.chunk_size, 11);
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_manifest_nested_files() -> Result<()> {
+        let (folder, _temp) = create_test_folder();
+        let sub_dir = folder.path.join("sub");
+        fs::create_dir(&sub_dir)?;
+        fs::write(sub_dir.join("nested.txt"), "Nested Content")?;
+        fs::write(folder.path.join("root.txt"), "Root Content")?;
+
+        let manifest = folder.generate_manifest(1024)?;
+
+        assert_eq!(manifest.files.len(), 2);
+        assert_eq!(manifest.file_count, 2);
+
+        let nested_path = RelativePath::new("sub/nested.txt")?;
+        assert!(manifest.files.contains_key(&nested_path));
+
+        let root_path = RelativePath::new("root.txt")?;
+        assert!(manifest.files.contains_key(&root_path));
+        Ok(())
+    }
+
+    #[test]
+    fn test_generate_manifest_large_file_chunking() -> Result<()> {
+        let (folder, _temp) = create_test_folder();
+        let file_path = folder.path.join("large.bin");
+        let content = vec![0u8; 2048]; // 2KB
+        fs::write(&file_path, &content)?;
+
+        // Chunk size 1KB, should produce 2 chunks
+        let manifest = folder.generate_manifest(1024)?;
+
+        let relative_path = RelativePath::new("large.bin")?;
+        let entry = manifest.files.get(&relative_path).unwrap();
+
+        assert_eq!(entry.metadata.size(), 2048);
+        assert_eq!(entry.chunks.chunk_size, 1024);
+
+        let chunks = &entry.chunks;
+        assert_eq!(chunks.chunks.len(), 2);
+        assert_eq!(chunks.chunks[0].index, 0);
+        assert_eq!(chunks.chunks[0].hash, blake3::hash(&content[..1024]));
+        assert_eq!(chunks.chunks[1].index, 1);
+        assert_eq!(chunks.chunks[1].hash, blake3::hash(&content[1024..]));
+        Ok(())
+    }
+
+    #[test]
     fn test_chunked_transfer_linear() -> Result<()> {
-        let folder = create_test_folder();
+        let (folder, _temp) = create_test_folder();
         let transfer_id = 1;
         let file_content = b"Hello, World!";
         let chunk_size = 5;
@@ -409,7 +595,7 @@ mod tests {
 
     #[test]
     fn test_chunked_transfer_unordered() -> Result<()> {
-        let folder = create_test_folder();
+        let (folder, _temp) = create_test_folder();
         let transfer_id = 2;
         let file_content = b"Unordered chunks test";
         let chunk_size = 5;
@@ -451,7 +637,7 @@ mod tests {
 
     #[test]
     fn test_chunked_transfer_early_end() -> Result<()> {
-        let folder = create_test_folder();
+        let (folder, _temp) = create_test_folder();
         let transfer_id = 3;
         let file_content = b"Race condition test";
         let chunk_size = 5;
@@ -487,11 +673,11 @@ mod tests {
         assert!(!file_path.exists());
 
         // Send remaining chunks
-        for i in 1..chunks.len() {
+        for (i, chunk) in chunks.iter().enumerate().skip(1) {
             folder.process_chunked_transfer(ChunkedTransferOp::Chunk {
                 id: transfer_id,
                 index: i as u64,
-                data: chunks[i].to_vec(),
+                data: chunk.to_vec(),
             })?;
         }
 
@@ -505,7 +691,7 @@ mod tests {
 
     #[test]
     fn test_chunked_transfer_hash_mismatch() -> Result<()> {
-        let folder = create_test_folder();
+        let (folder, _temp) = create_test_folder();
         let transfer_id = 4;
         let file_content = b"Corrupted content";
         let chunk_size = 5;
