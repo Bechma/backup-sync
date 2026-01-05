@@ -39,11 +39,11 @@ pub enum ChunkedTransferOp {
     Start {
         id: u64,
         total_size: u64,
+        chunk_size: u64,
     },
     Chunk {
         id: u64,
-        index: u32,
-        chunk_size: u32,
+        index: u64,
         data: Vec<u8>,
     },
     End {

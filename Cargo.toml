@@ -26,4 +26,5 @@ backup_sync_protocol = { path = "protocol" }
 unsafe_code = "forbid"
 
 [workspace.lints.clippy]
-unwrap_used = "forbid"
+unwrap_used = "deny"
+expect_used = "deny"
