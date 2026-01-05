@@ -123,7 +123,7 @@ pub enum ServerMessage {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Handshake {
-    pub protocol_version: u32,
+    pub protocol_version: u64,
     pub capabilities: Vec<String>, // e.g., ["compression:zstd", "delta:rsync"]
 }
 

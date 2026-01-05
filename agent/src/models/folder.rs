@@ -1,5 +1,4 @@
-use super::relative_path::RelativePath;
-use crate::models::FileMetadata;
+use super::{FileMetadata, RelativePath};
 use crate::protocol::{ChunkedTransferOp, FileOperation, FolderId};
 use anyhow::{Context, Result, bail};
 use blake3::Hash;
@@ -43,7 +42,7 @@ impl Folder {
         let from_path = self.resolve(from);
         let mut to_path = self.resolve(to);
         if !from_path.exists() {
-            return Err(anyhow::anyhow!("File not found: {}", from_path.display()));
+            bail!("File not found: {}", from_path.display());
         }
 
         if to_path.exists() {
@@ -73,7 +72,7 @@ impl Folder {
         let computed_hash = blake3::hash(&content);
 
         if computed_hash != hash {
-            return Err(anyhow::anyhow!("Hash mismatch"));
+            bail!("Hash mismatch: expected {hash}, got {computed_hash}");
         }
 
         fs::write(&resolved_path, content).with_context(|| {

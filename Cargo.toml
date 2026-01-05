@@ -1,5 +1,5 @@
 [workspace]
-members = ["client", "ws", "protocol", "server", "agent"]
+members = ["client_ref", "ws", "protocol", "server", "agent"]
 resolver = "3"
 
 [workspace.package]
@@ -21,3 +21,9 @@ futures-util = "0.3"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 backup_sync_protocol = { path = "protocol" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+unwrap_used = "forbid"
