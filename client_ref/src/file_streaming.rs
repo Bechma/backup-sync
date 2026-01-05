@@ -50,7 +50,7 @@ pub struct ChunkedDeltaWriter {
 }
 
 impl ChunkedDeltaWriter {
-    #[must_use] 
+    #[must_use]
     pub fn new(transfer_id: u64, chunk_size: usize, sender: mpsc::Sender<FileOperation>) -> Self {
         Self {
             buffer: Vec::with_capacity(chunk_size),

@@ -1,8 +1,8 @@
 use axum::{
-    http::{header, StatusCode},
+    Router,
+    http::{StatusCode, header},
     middleware,
     routing::{delete, get, post},
-    Router,
 };
 use std::sync::Arc;
 

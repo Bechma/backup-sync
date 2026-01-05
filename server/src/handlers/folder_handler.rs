@@ -1,10 +1,10 @@
 use crate::error::ApiError;
-use crate::{auth::Claims, AppState};
+use crate::{AppState, auth::Claims};
 use axum::{
-    extract::{Path, State}, http::StatusCode,
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
-    Extension,
-    Json,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -27,9 +27,10 @@ pub async fn create_folder(
         &state.db,
         &claims.sub,
         &payload.name,
-        &payload.computer_id
-    ).await?;
-    
+        &payload.computer_id,
+    )
+    .await?;
+
     Ok((StatusCode::CREATED, Json(folder)))
 }
 
@@ -39,13 +40,10 @@ pub async fn join_folder(
     Path(folder_id): Path<String>,
     Json(payload): Json<JoinFolderRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let message = crate::logic::folder::join_folder(
-        &state.db,
-        &claims.sub,
-        &folder_id,
-        &payload.computer_id
-    ).await?;
-    
+    let message =
+        crate::logic::folder::join_folder(&state.db, &claims.sub, &folder_id, &payload.computer_id)
+            .await?;
+
     Ok((StatusCode::OK, message))
 }
 
@@ -55,13 +53,9 @@ pub async fn leave_folder(
     Path(folder_id): Path<String>,
     Json(payload): Json<JoinFolderRequest>, // Reusing struct as it has computer_id
 ) -> Result<impl IntoResponse, ApiError> {
-    crate::logic::folder::leave_folder(
-        &state.db,
-        &claims.sub,
-        &folder_id,
-        &payload.computer_id
-    ).await?;
-    
+    crate::logic::folder::leave_folder(&state.db, &claims.sub, &folder_id, &payload.computer_id)
+        .await?;
+
     Ok((StatusCode::NO_CONTENT, ""))
 }
 
@@ -69,11 +63,8 @@ pub async fn list_folders(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let folders = crate::logic::folder::get_folders_by_user(
-        &state.db,
-        &claims.sub
-    ).await?;
-    
+    let folders = crate::logic::folder::get_folders_by_user(&state.db, &claims.sub).await?;
+
     Ok((StatusCode::OK, Json(folders)))
 }
 
@@ -82,11 +73,8 @@ pub async fn list_folders_for_computer(
     Extension(claims): Extension<Claims>,
     Path(computer_id): Path<String>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let folders = crate::logic::folder::get_folders_by_computer(
-        &state.db,
-        &claims.sub,
-        &computer_id
-    ).await?;
-    
+    let folders =
+        crate::logic::folder::get_folders_by_computer(&state.db, &claims.sub, &computer_id).await?;
+
     Ok((StatusCode::OK, Json(folders)))
 }

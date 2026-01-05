@@ -1,20 +1,20 @@
+use crate::AppState;
 use crate::auth::Claims;
 use crate::error::ApiError;
-use crate::AppState;
 use anyhow::Context;
 use argon2::{
-    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
     Argon2,
+    password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString, rand_core::OsRng},
 };
 use axum::{
+    Router,
     extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
     routing::post,
-    Router,
 };
 // Assuming these exist, but we might need DTOs
-use jsonwebtoken::{encode, EncodingKey, Header};
+use jsonwebtoken::{EncodingKey, Header, encode};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 

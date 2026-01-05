@@ -1,10 +1,10 @@
 use crate::error::ApiError;
-use crate::{auth::Claims, AppState};
+use crate::{AppState, auth::Claims};
 use axum::{
-    extract::{Path, State}, http::StatusCode,
+    Extension, Json,
+    extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
-    Extension,
-    Json,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -37,10 +37,7 @@ pub async fn list_computers(
     State(state): State<AppState>,
     Extension(claims): Extension<Claims>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let computers = crate::logic::computer::get_computers_by_user(
-        &state.db,
-        &claims.sub,
-    ).await?;
+    let computers = crate::logic::computer::get_computers_by_user(&state.db, &claims.sub).await?;
 
     Ok((StatusCode::OK, Json(computers)))
 }

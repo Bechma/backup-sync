@@ -22,11 +22,15 @@ pub async fn auth_middleware(
     let auth_header = if let Some(auth_header) = auth_header {
         auth_header
     } else {
-        return Err(ApiError::AuthenticationFailed("Missing authorization header".to_string()));
+        return Err(ApiError::AuthenticationFailed(
+            "Missing authorization header".to_string(),
+        ));
     };
 
     if !auth_header.starts_with("Bearer ") {
-        return Err(ApiError::AuthenticationFailed("Invalid authorization header format".to_string()));
+        return Err(ApiError::AuthenticationFailed(
+            "Invalid authorization header format".to_string(),
+        ));
     }
 
     let token = &auth_header[7..];

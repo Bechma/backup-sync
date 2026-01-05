@@ -317,7 +317,7 @@ impl Folder {
 impl Drop for Folder {
     fn drop(&mut self) {
         // TODO: When added resumability support, we should not remove temp files
-        let _ = fs::remove_dir_all(self.temp_folder_path());
+        _ = fs::remove_dir_all(self.temp_folder_path());
     }
 }
 
