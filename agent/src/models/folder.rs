@@ -127,24 +127,24 @@ impl Folder {
                 let relative_path = RelativePath::new(relative_path)?;
 
                 let file_size = metadata.len();
-                let file_metadata = FileMetadata::from_std_metadata(&metadata, &path)?;
-                let hash = hash_file(&path)?;
+                let file = fs::File::open(&path).context("Failed to open file")?;
 
-                let chunks = if file_size > chunk_size {
-                    self.generate_chunk_info(&path, chunk_size)?
-                } else {
-                    libsync3::Signature {
-                        chunk_size: file_size as usize,
-                        chunks: vec![libsync3::ChunkSignature { index: 0, hash }],
-                    }
-                };
+                let mut hashing_reader = crate::HashingReader::new(file);
+
+                let signature = libsync3::generate_signatures_with_block_size(
+                    &mut hashing_reader,
+                    chunk_size as usize,
+                )
+                .map_err(|e| anyhow::anyhow!("Failed to generate signature: {e}"))?;
+
+                let hash = hashing_reader.finalize();
 
                 files.insert(
                     relative_path,
                     FileEntry {
                         hash,
-                        metadata: file_metadata,
-                        chunks,
+                        metadata: FileMetadata::from_std_metadata(&metadata, &path)?,
+                        signature,
                     },
                 );
 
@@ -154,12 +154,6 @@ impl Folder {
         }
 
         Ok(())
-    }
-
-    fn generate_chunk_info(&self, path: &PathBuf, chunk_size: u64) -> Result<libsync3::Signature> {
-        let file = fs::File::open(path).context("Failed to open file")?;
-        libsync3::signature_with_chunk_size(file, chunk_size as usize)
-            .map_err(|e| anyhow::anyhow!("Failed to generate signature: {}", e))
     }
 
     fn process_delete(&self, path: &RelativePath) -> Result<()> {
@@ -432,7 +426,7 @@ impl Drop for Folder {
     }
 }
 
-fn hash_file(reference: &PathBuf) -> Result<Hash> {
+pub fn hash_file(reference: &PathBuf) -> Result<Hash> {
     let mut hasher = blake3::Hasher::new();
     let file = fs::File::open(reference).context("Failed to open file")?;
     hasher
@@ -445,6 +439,7 @@ fn hash_file(reference: &PathBuf) -> Result<Hash> {
             )
         })
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -497,7 +492,8 @@ mod tests {
         let relative_path = RelativePath::new("test.txt")?;
         let entry = manifest.files.get(&relative_path).unwrap();
         assert_eq!(entry.metadata.size(), 11);
-        assert_eq!(entry.chunks.chunk_size, 11);
+        assert_eq!(entry.hash, hash_file(&file_path)?);
+        assert_eq!(entry.signature.len(), 1);
         Ok(())
     }
 
@@ -526,7 +522,7 @@ mod tests {
     fn test_generate_manifest_large_file_chunking() -> Result<()> {
         let (folder, _temp) = create_test_folder();
         let file_path = folder.path.join("large.bin");
-        let content = vec![0u8; 2048]; // 2KB
+        let content = [vec![0u8; 1024], vec![1u8; 1024]].concat(); // 2KB
         fs::write(&file_path, &content)?;
 
         // Chunk size 1KB, should produce 2 chunks
@@ -536,14 +532,22 @@ mod tests {
         let entry = manifest.files.get(&relative_path).unwrap();
 
         assert_eq!(entry.metadata.size(), 2048);
-        assert_eq!(entry.chunks.chunk_size, 1024);
+        assert_eq!(entry.signature.block_size(), 1024);
 
-        let chunks = &entry.chunks;
-        assert_eq!(chunks.chunks.len(), 2);
-        assert_eq!(chunks.chunks[0].index, 0);
-        assert_eq!(chunks.chunks[0].hash, blake3::hash(&content[..1024]));
-        assert_eq!(chunks.chunks[1].index, 1);
-        assert_eq!(chunks.chunks[1].hash, blake3::hash(&content[1024..]));
+        let chunks = &entry.signature;
+        assert_eq!(chunks.len(), 2);
+
+        let roll = libsync3::rolling::RollingChecksum::compute(&content[..1024]);
+        assert_eq!(
+            chunks.weak(roll),
+            Some(&vec![(libsync3::xxh3_128(&content[..1024]), 0usize)])
+        );
+
+        let roll = libsync3::rolling::RollingChecksum::compute(&content[1024..]);
+        assert_eq!(
+            chunks.weak(roll),
+            Some(&vec![(libsync3::xxh3_128(&content[1024..]), 1usize)])
+        );
         Ok(())
     }
 

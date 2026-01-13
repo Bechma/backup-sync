@@ -66,11 +66,11 @@ pub enum DeltaSyncOp {
     },
     RequestDelta {
         path: RelativePath,
-        signature: libsync3::Signature,
+        signature: libsync3::Signatures,
     },
     ApplyDelta {
         path: RelativePath,
-        delta: libsync3::Delta,
+        delta: Vec<libsync3::DeltaCommand>,
         hash: Hash,
     },
 }
@@ -95,13 +95,13 @@ pub enum FolderResponse {
     SyncManifest(SyncManifest),
     Signature {
         path: RelativePath,
-        signature: libsync3::Signature,
+        signature: libsync3::Signatures,
         hash: Hash,
     },
     Delta {
         id: u64,
         path: RelativePath,
-        delta: libsync3::Delta,
+        delta: Vec<libsync3::DeltaCommand>,
         hash: Hash,
     },
 }
@@ -167,5 +167,5 @@ pub struct SyncManifest {
 pub struct FileEntry {
     pub hash: Hash,
     pub metadata: FileMetadata,
-    pub chunks: libsync3::Signature,
+    pub signature: libsync3::Signatures,
 }
