@@ -64,14 +64,27 @@ pub enum DeltaSyncOp {
     RequestSignature {
         path: RelativePath,
     },
-    RequestDelta {
+    ResponseSignature {
         path: RelativePath,
         signature: libsync3::Signatures,
     },
-    ApplyDelta {
+    DeltaTransferStart {
+        id: u64,
         path: RelativePath,
-        delta: Vec<libsync3::DeltaCommand>,
+        total_chunks: usize,
+    },
+    DeltaTransferChunk {
+        id: u64,
+        chunk_index: u64,
+        chunk: Vec<libsync3::DeltaCommand>,
+    },
+    DeltaTransferEnd {
+        id: u64,
         hash: Hash,
+    },
+    Abort {
+        id: u64,
+        reason: String,
     },
 }
 

@@ -1376,7 +1376,7 @@ dependencies = [
 [[package]]
 name = "libsync3"
 version = "0.1.0"
-source = "git+https://github.com/Bechma/libsync3.git?rev=1420e443a43b2d5eedaa7e8fbb776660787df59e#1420e443a43b2d5eedaa7e8fbb776660787df59e"
+source = "git+https://github.com/Bechma/libsync3.git?rev=168968a5813d9c9a6f4ac535da672959ed14d586#168968a5813d9c9a6f4ac535da672959ed14d586"
 dependencies = [
  "serde",
  "simd-adler32",

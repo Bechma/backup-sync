@@ -84,7 +84,7 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let folder = Folder::new(
             uuid::Uuid::new_v4(),
-            "test_folder".to_string(),
+            "test_folder",
             temp_dir.path().to_path_buf(),
         );
         (folder, temp_dir)
