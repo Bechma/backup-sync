@@ -19,7 +19,7 @@ time = { version = "0.3.45", features = ["serde", "formatting", "parsing"] }
 thiserror = "2.0"
 filetime = "0.2"
 blake3 = { version = "1.8", features = ["serde"] }
-libsync3 = { git = "https://github.com/Bechma/libsync3.git", rev = "168968a5813d9c9a6f4ac535da672959ed14d586", features = ["serde"] }
+libsync3 = { git = "https://github.com/Bechma/libsync3.git", rev = "7518ea9a329dd0866fce000b4cd52eb2f1502e90", features = ["serde"] }
 unicode-normalization = "0.1"
 
 [dev-dependencies]
