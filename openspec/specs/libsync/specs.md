@@ -1,0 +1,1 @@
+You can read about the use of this library by reading the public API in `@/libsync3/src/lib.rs`

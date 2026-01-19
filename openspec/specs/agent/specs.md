@@ -127,15 +127,6 @@ pub enum FileOp {
         from: RelativePath,
         to: RelativePath,
     },
-
-    // Signature
-    RequestSignature {
-        path: RelativePath,
-    },
-    ResponseSignature {
-        path: RelativePath,
-        signature: libsync3::Signatures,
-    },
 }
 ```
 
@@ -177,6 +168,7 @@ The resolution of conflicts will be the following:
 - The timestamp is the mtime of the file transformed into a `time::OffsetDateTime` so it will be on the same format as the server.
 - Do not follow symlinks, hardlink or special files. Ignore them completely.
 - Always preserve the metadata and permissions of the file.
+- If there's a mismatch on the hash when received the file, the agent will retry the transfer.
 
 Backpressure for the FolderHandler needs to handle all messages in real time, it's a coordinator so the heavy work is handled to the other actors.
 
@@ -227,6 +219,6 @@ The agent can have multiple folders to watch as it will only be one agent per pc
 If the websocket connection is closed, all transfers to the websocket needs to stop until the connection is restored, so all transfers can resume.
 The notify events/actions will queue in the FolderHandler until the connection is restored.
 
-We can have ignored patterns specified per folder.
+We can have gitignore-style ignored patterns specified per folder.
 
 The timeout for transfers is 10 seconds. If a transfer didn't receive any message in this period, it will be aborted.

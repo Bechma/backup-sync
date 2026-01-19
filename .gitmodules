@@ -1,0 +1,3 @@
+[submodule "libsync3"]
+	path = libsync3
+	url = git@github.com:Bechma/libsync3.git
