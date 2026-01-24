@@ -1,9 +1,9 @@
 [package]
-name = "backup_sync_protocol"
+name = "backup_sync_server_sdk"
 version = "0.1.0"
+description.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-backup_sync_server_sdk = { workspace = true }

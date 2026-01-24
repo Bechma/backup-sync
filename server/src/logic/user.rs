@@ -1,5 +1,5 @@
 use crate::error::ApiError;
-use backup_sync_protocol::User;
+use backup_sync_server_sdk::User;
 use sqlx::{Pool, Sqlite};
 
 pub async fn get_user_state(db: &Pool<Sqlite>, user_id: &str) -> Result<User, ApiError> {

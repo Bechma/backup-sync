@@ -18,7 +18,7 @@ serde_json = { workspace = true }
 
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-backup_sync_protocol = { workspace = true }
+backup_sync_server_sdk = { workspace = true }
 sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "uuid"] }
 jsonwebtoken = { version = "10.2", features = ["rust_crypto"] }
 argon2 = "0.5"

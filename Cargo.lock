@@ -193,6 +193,7 @@ dependencies = [
 name = "backup_sync_protocol"
 version = "0.1.0"
 dependencies = [
+ "backup_sync_server_sdk",
  "serde",
 ]
 
@@ -203,7 +204,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "axum",
- "backup_sync_protocol",
+ "backup_sync_server_sdk",
  "jsonwebtoken",
  "serde",
  "serde_json",
@@ -215,6 +216,13 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "backup_sync_server_sdk"
+version = "0.1.0"
+dependencies = [
+ "serde",
 ]
 
 [[package]]

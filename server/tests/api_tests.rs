@@ -2,7 +2,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use backup_sync_protocol::{Computer, SyncFolder, User};
+use backup_sync_server_sdk::{Computer, SyncFolder, User};
 use backup_sync_server::create_app;
 use backup_sync_server::handlers::auth_handler::{AuthResponse, LoginRequest, RegisterUserRequest};
 use backup_sync_server::handlers::folder_handler::{CreateFolderRequest, JoinFolderRequest};

@@ -1,5 +1,5 @@
 use crate::error::ApiError;
-use backup_sync_protocol::SyncFolder;
+use backup_sync_server_sdk::SyncFolder;
 use sqlx::{Pool, Sqlite};
 use uuid::Uuid;
 
